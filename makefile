@@ -14,6 +14,7 @@ SERVER = server
 CLIENT_DIR = client
 SERVER_DIR = server
 COMMON_DIR = common
+TEST_DIR = tests
 
 # ================= Options du clean =================
 CLEAN = clean
@@ -32,6 +33,9 @@ $(CLIENT): $(OBJ_PATH)/$(CLIENT).o  $(OBJ_PATH)/communication.o $(OBJ_PATH)/game
 
 $(SERVER): $(OBJ_PATH)/$(SERVER).o  $(OBJ_PATH)/communication.o $(OBJ_PATH)/game.o # + additionnal obj files
 	@mkdir -p $(BIN_PATH)
+	$(GCC) -o $(BIN_PATH)/$@ $^ $(LIBS)
+
+test_game: $(OBJ_PATH)/test_game.o $(OBJ_PATH)/game.o
 	$(GCC) -o $(BIN_PATH)/$@ $^ $(LIBS)
 
 
@@ -53,6 +57,11 @@ $(OBJ_PATH)/communication.o:
 $(OBJ_PATH)/game.o: 
 	@mkdir -p $(OBJ_PATH)
 	$(GCC) $(CCFLAGS) -c $(SRC_PATH)/$(COMMON_DIR)/game.c -o $@
+
+#compilation des tests
+$(OBJ_PATH)/test_game.o: 
+	@mkdir -p $(OBJ_PATH)
+	$(GCC) $(CCFLAGS) -c $(SRC_PATH)/$(TEST_DIR)/test_game.c -o $@
 
 # ================= Clean =================
 $(CLEAN):

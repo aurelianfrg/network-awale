@@ -46,9 +46,12 @@ typedef struct Game {
 } Game;
 
 
-
+void simpleGamePrinting(Game* game);
 
 Game* initGame(User user1, User user2);
+
+int playMove(Game* game, int turn, int selected_house);
+//play the action of a move 
 
 void finishGame(Game* game);
 
