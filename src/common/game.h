@@ -1,6 +1,12 @@
+#pragma once 
 
+
+// constants 
 
 #define USERNAME_LENGTH 50
+
+
+// data structures 
 
 typedef struct House {
     unsigned int seeds;
@@ -23,8 +29,10 @@ typedef struct Player {
 
 typedef struct Board {
     House houses[12];
-
 } Board;
+// houses are filled the following way in the array;
+//  11 10 9  8  7  6
+//  0  1  2  3  4  5  
 
 typedef struct GameSnapshot {
     Board board; 
@@ -40,8 +48,9 @@ typedef struct Game {
 
 
 
-void initGame();
+Game* initGame(User user1, User user2);
 
+void finishGame(Game* game);
 
 char isGameOver(GameSnapshot snapshot);
 // tells whether the game is over by checking if any of the players has more than 12 points 

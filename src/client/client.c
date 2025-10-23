@@ -67,8 +67,6 @@ int main(int argc, char **argv) {
 
 
 
-
-
     struct pollfd pfds[2];
     pfds[0].fd = STDIN_FILENO;
     pfds[0].events = POLLIN;
