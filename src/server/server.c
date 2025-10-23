@@ -23,6 +23,8 @@
 #include <poll.h>
 #include <fcntl.h>
 
+#include "../common/communication.h"
+
 #define BACKLOG 16
 #define MAX_CLIENTS 1024
 #define BUF_SIZE 4096
@@ -184,6 +186,19 @@ int main(int argc, char **argv) {
                     continue;
                 } else {
 
+                     printf("Message length : %lu\n",r);
+                     int message_type;
+                     message_type = *(int*)buf;
+
+                     MessageUserCreation mes;
+                     if (message_type == USER_CREATION) {
+                        mes = * (MessageUserCreation*) (buf+sizeof(int));
+                        printf("message type : %d\n\n", message_type);
+                        printf("username : %s\n", mes.username);
+                     }
+
+                     
+                     
                     // standard case : process how you handle the client
                     ssize_t sent = 0;
                     while (sent < r) {

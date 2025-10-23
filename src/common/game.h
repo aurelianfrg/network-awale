@@ -6,10 +6,10 @@ typedef struct House {
     unsigned int seeds;
 } House;
 
-enum Side {
+typedef enum Side {
     BOTTOM,
     TOP
-};
+} Side;
 
 typedef struct User {
     unsigned int id;

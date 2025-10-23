@@ -26,11 +26,11 @@ RMFLAGS = -f
 # ===============================================
 
 # Compilation des exécutables finaux
-$(CLIENT): $(OBJ_PATH)/$(CLIENT).o  # + additionnal obj files
+$(CLIENT): $(OBJ_PATH)/$(CLIENT).o  $(OBJ_PATH)/communication.o $(OBJ_PATH)/game.o # + additionnal obj files
 	@mkdir -p $(BIN_PATH)
 	$(GCC) -o $(BIN_PATH)/$@ $^ $(LIBS)
 
-$(SERVER): $(OBJ_PATH)/$(SERVER).o  # + additionnal obj files
+$(SERVER): $(OBJ_PATH)/$(SERVER).o  $(OBJ_PATH)/communication.o $(OBJ_PATH)/game.o # + additionnal obj files
 	@mkdir -p $(BIN_PATH)
 	$(GCC) -o $(BIN_PATH)/$@ $^ $(LIBS)
 

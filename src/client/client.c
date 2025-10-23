@@ -21,6 +21,8 @@
 
 #include <poll.h>
 
+#include "../common/communication.h"
+
 #define BUF_SIZE 4096
 
 int main(int argc, char **argv) {
@@ -56,6 +58,16 @@ int main(int argc, char **argv) {
     }
 
     printf("Connected to %s:%d. Type messages and press Enter.\n", server_ip, port);
+
+
+    // begin initial messages 
+    MessageUserCreation mes;
+    strcpy(mes.username,"xXAurelXx");
+    sendMessageUserCreation(sock, mes);
+
+
+
+
 
     struct pollfd pfds[2];
     pfds[0].fd = STDIN_FILENO;

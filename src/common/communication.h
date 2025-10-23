@@ -44,3 +44,5 @@ typedef struct MessageGameEnd {
 typedef struct MessageGameMove {
     GameSnapshot snapshot;
 } MessageGameMove;
+
+void sendMessageUserCreation(int fd, MessageUserCreation message);
