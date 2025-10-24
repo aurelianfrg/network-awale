@@ -4,7 +4,9 @@
 // constants 
 
 #define USERNAME_LENGTH 50
-
+#define true 1
+#define false 0
+#define bool char
 
 // data structures 
 
@@ -46,12 +48,20 @@ typedef struct Game {
 } Game;
 
 
+// --- Game functionalities --- 
+
 void simpleGamePrinting(Game* game);
+// simply print the state of a game
 
 Game* initGame(User user1, User user2);
+// init a game between users
 
-int playMove(Game* game, int turn, int selected_house);
-//play the action of a move 
+User* createUser(const char name[]);
+// create an user with a name and a unique id
+
+int playMove(Game* game, Side turn, int selected_house);
+// play the action of a move and updates the game snapshot
+// returns a negative value if the move was not allowed
 
 void finishGame(Game* game);
 

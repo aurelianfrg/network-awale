@@ -5,12 +5,16 @@
 #include "../common/game.h"
 
 int main() {
-    User user1;
-    User user2;
-    strcpy(user1.username, "Anatou");
-    strcpy(user2.username, "Aurel");
+    User* user1 = createUser("Anatou");
+    User* user2 = createUser("Aurel");
 
-    Game * game = initGame(user1, user2);
+    Game * game = initGame(*user1, *user2);
+    simpleGamePrinting(game);
+
+    int valid_move;
+    
+    valid_move = playMove(game, BOTTOM, 2);
+    printf("valid move ? %d\n", valid_move);
     simpleGamePrinting(game);
 
     return 0;
