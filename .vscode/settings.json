@@ -1,7 +1,9 @@
 {
     "C_Cpp.default.compilerPath": "/usr/bin/gcc",
     "files.associations": {
+        "flake.lock": "json",
         "compare": "c",
-        "type_traits": "c"
+        "type_traits": "c",
+        "terminal.h": "c"
     }
 }
