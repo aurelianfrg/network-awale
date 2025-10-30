@@ -1,6 +1,6 @@
 # ================= Options de compilation =================
 GCC = gcc
-CCFLAGS = -ansi -pedantic -Wall -std=c17 -D_POSIX_SOURCE #-g -D MAP
+CCFLAGS = -ansi -pedantic -Wall -std=c17 #-g -D MAP
 #LIBS = -lm
 
 # ================= Localisations =================
@@ -25,12 +25,8 @@ RMFLAGS = -f
 # ================= COMPILATION =================
 # ===============================================
 
-tui: 
-	@mkdir -p $(BIN_PATH)
-	$(GCC) -o $(BIN_PATH)/tui $(SRC_PATH)/$(CLIENT_DIR)/tui.c $(LIBS)
-
 # Compilation des exécutables finaux
-$(CLIENT): $(OBJ_PATH)/$(CLIENT).o  $(OBJ_PATH)/communication.o $(OBJ_PATH)/game.o # + additionnal obj files
+$(CLIENT): $(OBJ_PATH)/$(CLIENT).o  $(OBJ_PATH)/communication.o $(OBJ_PATH)/game.o $(OBJ_PATH)/tui.o # + additionnal obj files
 	@mkdir -p $(BIN_PATH)
 	$(GCC) -o $(BIN_PATH)/$@ $^ $(LIBS)
 

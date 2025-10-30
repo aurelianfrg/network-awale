@@ -1,8 +1,16 @@
 # Les différents écrans
-- Accueil
+- Accueil (Création d'utilisateur (+ connection ?))
 - Menu principal
 - File d'attente
 - Jeu
+
+# TODO
+- [x] Taille limite de l'écran / ne pas crash quand trop petit 
+- [-] Fonction optionnellement implémentables
+- [x] caractères non ascii pour le texte
+- [ ] Couleurs
+- [ ] Input
+- [ ] Déplacer le curseur
 
 # Spécifications des écrans
 

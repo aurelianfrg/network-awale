@@ -14,6 +14,13 @@ void handleResize(int sig) {
 void die(const char *s) {
     terminalClearScreen();
     perror(s);
+    write(STDOUT_FILENO, "\r\n", 2);
+    exit(1);
+}
+void dieNoError(const char *s) {
+    terminalClearScreen();
+    write(STDOUT_FILENO, s, strlen(s));
+    write(STDOUT_FILENO, "\r\n", 2);
     exit(1);
 }
 
@@ -56,7 +63,7 @@ void enableRawMode() {
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
 }
 
-int editorReadKey() {
+int terminalReadKey() {
     int nread;
     char c;
     while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
@@ -147,19 +154,29 @@ int getWindowSize(int *rows, int *cols) {
 // ============ TUI LOGIC ============
 // ===================================
 
-ApplicationState app_state;
+TuiState app_state;
 
 void initApplication() {
     app_state.cursorx = 0;
     app_state.cursory = 0;
     app_state.term_config = *initTerminal();
-    signal(SIGWINCH, handleResize);
+    // signal(SIGWINCH, handleResize);
+
+    struct sigaction sa;
+    sa.sa_handler = handleResize;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
+    if (sigaction(SIGWINCH, &sa, NULL) == -1) {
+        perror("sigaction");
+        exit(1);
+    }
 }
 
 // ========= INPUT ==========
 
 void processKeypress() {
-    int c = editorReadKey();
+    int c = terminalReadKey();
+    printf("c=%d\r\n", c);
     switch (c) {
         case CTRL_KEY('q'):
             terminalClearScreen();
@@ -222,6 +239,10 @@ void editorMoveCursor(int key) {
 // ========= OUTPUT ==========
 
 void drawFrame() {
+    if (resize_pending) {
+        resize_pending = 0;
+        if (getWindowSize(&app_state.term_config.screenrows, &app_state.term_config.screencols) == -1) die("getWindowSize");
+    }
     sigset_t x,old;
     sigemptyset(&x);
     sigaddset(&x, SIGWINCH);
@@ -231,18 +252,31 @@ void drawFrame() {
 
     // Prepare frame
     GridCharBuffer* gcbuf = createGcbuf(app_state.term_config.screenrows, app_state.term_config.screencols);
-    // resetCurosrPos(&ab);
-    // hideCursor(&ab);
 
     // Draw frame
-    editorDrawRows(gcbuf);
-    drawBox(gcbuf,15,5);
-    drawBox(gcbuf,25,7);
+    frameContent(gcbuf);
 
     // flush frame
     flushFrame(gcbuf);
     freeGcbuf(gcbuf);
     sigprocmask(SIG_UNBLOCK, &x, NULL);
+}
+
+int frame_counter = 0;
+void drawFrameDebug() {
+    printf("====== FRAME %d ====== \r\n", frame_counter);
+    frame_counter++;
+    printf("resize_pending=%d\r\n", resize_pending);
+    if (resize_pending) {
+        resize_pending = 0;
+        if (getWindowSize(&app_state.term_config.screenrows, &app_state.term_config.screencols) == -1) die("getWindowSize");
+    }
+    sigset_t x,old;
+    sigemptyset(&x);
+    sigaddset(&x, SIGWINCH);
+    sigprocmask(SIG_SETMASK, NULL, &old);
+    printf("is SIGWINCH in mask ? %d\r\n", sigismember(&old, SIGWINCH));
+    printf("is SIGWINCH in x ? %d\r\n", sigismember(&x, SIGWINCH));
 }
 
 GridCharBuffer* createGcbuf(int rows, int cols) {
@@ -269,6 +303,9 @@ void freeGcbuf(GridCharBuffer* gcbuf) {
 }
 
 void putGcbuf(GridCharBuffer* gcbuf, int row, int col, char* s, int bytes) {
+    if (row > gcbuf->rows-1 || col > gcbuf->cols-1) return;
+    if (row < 0 || col < 0) return;
+
     gcbuf->byte_size += bytes - gcbuf->buf[row][col].size;
     gcbuf->buf[row][col].size = bytes;
     for (int j=0; j<bytes; j++)
@@ -326,10 +363,111 @@ void flushFrame(GridCharBuffer* gcbuf) {
     free(char_buf);
 }
 
-void drawBox(GridCharBuffer* gcbuf, int width, int height) {
+void setCursorPos(int row, int col) {
+    app_state.cursorx = col;
+    app_state.cursory = row;
+}
+
+void setCursorPosRelative(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col) {
+    int pos_row, pos_col;
+    getDrawPosition(&pos_row, &pos_col, pos, gcbuf, 0, 0);
+    setCursorPos(pos_row+offset_row, pos_col+offset_col);
+}
+
+void getDrawPosition(int* offset_row, int* offset_col, ScreenPos pos, GridCharBuffer* gcbuf, int width, int height) {
+    printf("Woho, getDrawOffset %d\r\n", pos);
+    switch (pos) {
+    case TOP_LEFT:
+        *offset_row = 0;
+        *offset_col = 0;
+        break;
+    case TOP_CENTER:
+        *offset_row = 0;
+        *offset_col = gcbuf->cols/2 - width/2;
+        break;
+    case TOP_RIGHT:
+        *offset_row = 0;
+        *offset_col = gcbuf->cols - width;
+        break;
+    case CENTER_LEFT:
+        *offset_row = gcbuf->rows/2 - height/2;
+        *offset_col = 0;
+        break;
+    case CENTER:
+        *offset_row = gcbuf->rows/2 - height/2;
+        *offset_col = gcbuf->cols/2 - width/2;
+        break;
+    case CENTER_RIGHT:
+        *offset_row = gcbuf->rows/2 - height/2;
+        *offset_col = gcbuf->cols - width;
+        break;
+    case BOTTOM_LEFT:
+        *offset_row = gcbuf->rows - height;
+        *offset_col = 0;
+        break;
+    case BOTTOM_CENTER:
+        *offset_row = gcbuf->rows - height;
+        *offset_col = gcbuf->cols/2 - width/2;
+        break;
+    case BOTTOM_RIGHT:
+        *offset_row = gcbuf->rows - height;
+        *offset_col = gcbuf->cols - width;
+        break;
+
+    default:
+        *offset_row = 0;
+        *offset_col = 0;
+        break;
+    }
+}
+
+// ========= DRAW ========
+
+void drawBox(GridCharBuffer* gcbuf, int width, int height, ScreenPos pos) {
+    drawBoxWithOffset(gcbuf, width, height, pos, 0, 0);
+}
+
+void drawBoxWithOffset(GridCharBuffer* gcbuf, int width, int height, ScreenPos pos, int offset_row, int offset_col) { 
     // width and height are inset size
-    int offset_row = gcbuf->rows/2 - (height+2)/2;
-    int offset_col = gcbuf->cols/2 - (width+2)/2;
+    int pos_row, pos_col;
+    getDrawPosition(&pos_row, &pos_col, pos, gcbuf, width+2, height+2);
+    pos_row += offset_row;
+    pos_col += offset_col;
+
+    for (int row=0; row<height+2; row++) {
+        for (int col=0; col<width+2; col++) {
+            char box_drawing_char[4];
+            if (row==0) {
+                if (col==0) strcpy(box_drawing_char, "┌");
+                else if (col==width+1) strcpy(box_drawing_char, "┐");
+                else strcpy(box_drawing_char, "─");
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3);
+            }
+            else if (row==height+1) {
+                if (col==0) strcpy(box_drawing_char, "└");
+                else if (col==width+1) strcpy(box_drawing_char, "┘");
+                else strcpy(box_drawing_char, "─");
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3);
+            }
+            else if (col==0 || col==width+1) {
+                strcpy(box_drawing_char, "│");
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3);
+            }
+        }
+    }
+}
+
+
+void drawStrongBox(GridCharBuffer* gcbuf, int width, int height, ScreenPos pos) {
+    drawStrongBoxWithOffset(gcbuf, width, height, pos, 0, 0);
+}
+
+void drawStrongBoxWithOffset(GridCharBuffer* gcbuf, int width, int height, ScreenPos pos, int offset_row, int offset_col) { 
+    // width and height are inset size
+    int pos_row, pos_col;
+    getDrawPosition(&pos_row, &pos_col, pos, gcbuf, width+2, height+2);
+    pos_row += offset_row;
+    pos_col += offset_col;
 
     for (int row=0; row<height+2; row++) {
         for (int col=0; col<width+2; col++) {
@@ -338,43 +476,147 @@ void drawBox(GridCharBuffer* gcbuf, int width, int height) {
                 if (col==0) strcpy(box_drawing_char, "╔");
                 else if (col==width+1) strcpy(box_drawing_char, "╗");
                 else strcpy(box_drawing_char, "═");
-                putGcbuf(gcbuf, offset_row+row, offset_col+col, box_drawing_char, 3);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3);
             }
             else if (row==height+1) {
                 if (col==0) strcpy(box_drawing_char, "╚");
                 else if (col==width+1) strcpy(box_drawing_char, "╝");
                 else strcpy(box_drawing_char, "═");
-                putGcbuf(gcbuf, offset_row+row, offset_col+col, box_drawing_char, 3);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3);
             }
             else if (col==0 || col==width+1) {
                 strcpy(box_drawing_char, "║");
-                putGcbuf(gcbuf, offset_row+row, offset_col+col, box_drawing_char, 3);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3);
             }
         }
     }
 }
 
-void editorDrawRows(GridCharBuffer* gcbuf) {
+// strlen for unicode strings
+size_t u_strlen(char *s)
+{
+    size_t len = 0;
+    for (; *s; ++s) if ((*s & 0xC0) != 0x80) ++len;
+    return len;
+}
+
+// length for one unicode char
+size_t u_charlen(char *s)
+{
+    if (!s) return 0;
+    unsigned char c = (unsigned char)*s;
+
+    if (c < 0x80)        // 0xxxxxxx → ASCII (1 octet)
+        return 1;
+    else if ((c >> 5) == 0x6)  // 110xxxxx → 2 octets
+        return 2;
+    else if ((c >> 4) == 0xE)  // 1110xxxx → 3 octets
+        return 3;
+    else if ((c >> 3) == 0x1E) // 11110xxx → 4 octets
+        return 4;
+    else
+        return 1;  // caractère invalide ou continuation → on renvoie 1 par défaut
+}
+
+void drawText(GridCharBuffer* gcbuf, char* txt, ScreenPos pos) {
+    drawTextWithOffset(gcbuf, txt, pos, 0, 0);
+}
+
+void drawTextWithOffset(GridCharBuffer* gcbuf, char* txt, ScreenPos pos, int offset_row, int offset_col) {
+    int txt_width = u_strlen(txt);
+    int pos_row, pos_col;
+    getDrawPosition(&pos_row, &pos_col, pos, gcbuf, txt_width, 0);
+    pos_row += offset_row;
+    pos_col += offset_col;
+    int i=0;
+    int j=0;
+    while (txt[j]!='\0') {
+        int char_size = u_charlen(&txt[j]);
+        putGcbuf(gcbuf, pos_row, pos_col+i, &txt[j], char_size);
+        i++;
+        j+=char_size;
+    }
+}
+
+void drawRows(GridCharBuffer* gcbuf) {
     for (int row = 0; row < gcbuf->rows; row++)
         putGcbuf(gcbuf, row, 0, "~", 1);
 }
 
-void setCursorPos(int row, int col) {
-    app_state.cursorx = col;
-    app_state.cursory = row;
+void drawTitle(GridCharBuffer* gcbuf, ScreenPos pos) {
+    drawTitleWithOffset(gcbuf, pos, 0, 0);
 }
-
-int main() {
-    initApplication();
-    setCursorPos(5,5);
-
-    while (1) {
-        if (resize_pending == 1) {
-            resize_pending = 0;
-            if (getWindowSize(&app_state.term_config.screenrows, &app_state.term_config.screencols) == -1) die("getWindowSize");
-        }
-        drawFrame();
-        processKeypress();
+void drawTitleWithOffset(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col) {
+    int logo_var = 4;
+    switch (logo_var)
+    {
+    case 1:
+        char line1_1[] = "░█▀█░█▀▀░▀█▀░█░█░█▀█░█▀▄░█░█░░░█▀█░█░█░█▀█░█░░░█▀▀";
+        char line1_2[] = "░█░█░█▀▀░░█░░█▄█░█░█░█▀▄░█▀▄░░░█▀█░█▄█░█▀█░█░░░█▀▀";
+        char line1_3[] = "░▀░▀░▀▀▀░░▀░░▀░▀░▀▀▀░▀░▀░▀░▀░░░▀░▀░▀░▀░▀░▀░▀▀▀░▀▀▀";
+        drawTextWithOffset(gcbuf, line1_1, pos, -1+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line1_2, pos, 0+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line1_3, pos, 1+offset_row, 0+offset_col);
+        break;
+    case 2:
+        char line2_1[] = " _______          __                       __        _____                 .__          ";
+        char line2_2[] = " \\      \\   _____/  |___  _  _____________|  | __   /  _  \\__  _  _______  |  |   ____   ";
+        char line2_3[] = " /   |   \\_/ __ \\   __\\ \\/ \\/ /  _ \\_  __ \\  |/ /  /  /_\\  \\ \\/ \\/ /\\__  \\ |  | _/ __ \\ ";
+        char line2_4[] = "/    |    \\  ___/|  |  \\     (  <_> )  | \\/    <  /    |    \\     /  / __ \\|  |_\\  ___/ ";
+        char line2_5[] = "\\____|__  /\\___  >__|   \\/\\_/ \\____/|__|  |__|_ \\ \\____|__  /\\/\\_/  (____  /____/\\___  >";
+        char line2_6[] = "        \\/     \\/                              \\/         \\/             \\/          \\/ ";
+        drawTextWithOffset(gcbuf, line2_1, pos, -2+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line2_2, pos, -1+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line2_3, pos, 0+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line2_4, pos, 1+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line2_5, pos, 2+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line2_6, pos, 3+offset_row, 0+offset_col);
+        break;
+    case 3:
+        char line3_1[] = "███╗   ██╗███████╗████████╗██╗    ██╗ ██████╗ ██████╗ ██╗  ██╗     █████╗ ██╗    ██╗ █████╗ ██╗     ███████╗";
+        char line3_2[] = "████╗  ██║██╔════╝╚══██╔══╝██║    ██║██╔═══██╗██╔══██╗██║ ██╔╝    ██╔══██╗██║    ██║██╔══██╗██║     ██╔════╝";
+        char line3_3[] = "██╔██╗ ██║█████╗     ██║   ██║ █╗ ██║██║   ██║██████╔╝█████╔╝     ███████║██║ █╗ ██║███████║██║     █████╗  ";
+        char line3_4[] = "██║╚██╗██║██╔══╝     ██║   ██║███╗██║██║   ██║██╔══██╗██╔═██╗     ██╔══██║██║███╗██║██╔══██║██║     ██╔══╝  ";
+        char line3_5[] = "██║ ╚████║███████╗   ██║   ╚███╔███╔╝╚██████╔╝██║  ██║██║  ██╗    ██║  ██║╚███╔███╔╝██║  ██║███████╗███████╗";
+        char line3_6[] = "╚═╝  ╚═══╝╚══════╝   ╚═╝    ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝    ╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚══════╝";
+        drawTextWithOffset(gcbuf, line3_1, pos, -2+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line3_2, pos, -1+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line3_3, pos, 0+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line3_4, pos, 1+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line3_5, pos, 2+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line3_6, pos, 3+offset_row, 0+offset_col);
+        break;
+    case 4:
+        char line4_1[] = "███╗   ██╗███████╗████████╗██╗    ██╗ ██████╗ ██████╗ ██╗  ██╗";
+        char line4_2[] = "████╗  ██║██╔════╝╚══██╔══╝██║    ██║██╔═══██╗██╔══██╗██║ ██╔╝";
+        char line4_3[] = "██╔██╗ ██║█████╗     ██║   ██║ █╗ ██║██║   ██║██████╔╝█████╔╝ ";
+        char line4_4[] = "██║╚██╗██║██╔══╝     ██║   ██║███╗██║██║   ██║██╔══██╗██╔═██╗ ";
+        char line4_5[] = "██║ ╚████║███████╗   ██║   ╚███╔███╔╝╚██████╔╝██║  ██║██║  ██╗";
+        char line4_6[] = "╚═╝  ╚═══╝╚══════╝   ╚═╝    ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝";
+        char line4_7[] = "            █████╗ ██╗    ██╗ █████╗ ██╗     ███████╗         ";
+        char line4_8[] = "           ██╔══██╗██║    ██║██╔══██╗██║     ██╔════╝         ";
+        char line4_9[] = "           ███████║██║ █╗ ██║███████║██║     █████╗           ";
+        char line4_10[]= "           ██╔══██║██║███╗██║██╔══██║██║     ██╔══╝           ";
+        char line4_11[]= "           ██║  ██║╚███╔███╔╝██║  ██║███████╗███████╗         ";
+        char line4_12[]= "           ╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚══════╝         ";
+        char line4_13[]= "     ──────────────────  2   0   0   0  ──────────────────    ";
+        drawTextWithOffset(gcbuf, line4_1, pos, -6+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line4_2, pos, -5+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line4_3, pos, -4+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line4_4, pos, -3+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line4_5, pos, -2+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line4_6, pos, -1+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line4_7, pos, 0+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line4_8, pos, 1+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line4_9, pos, 2+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line4_10, pos, 3+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line4_11, pos, 4+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line4_12, pos, 5+offset_row, 0+offset_col);
+        drawTextWithOffset(gcbuf, line4_13, pos, 6+offset_row, 0+offset_col);
+        break;
+    
+    default:
+        drawTextWithOffset(gcbuf, "Network Awalé", pos, offset_row, offset_col);
+        break;
     }
-    return 0;
 }
