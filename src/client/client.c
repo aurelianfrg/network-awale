@@ -7,6 +7,8 @@ struct sockaddr_in srv;
 #define PSEUDO_MAX_LENGTH 30
 char user_pseudo_buf[PSEUDO_MAX_LENGTH];
 
+int display_color_test=0;
+
 int main(int argc, char **argv) {
     if (argc != 3) dieNoError("Usage: COMMAND <server-ip> <port>");
 
@@ -40,20 +42,6 @@ int main(int argc, char **argv) {
 }
 
 void frameContent(GridCharBuffer* gcbuf) {
-    // drawRows(gcbuf);
-    // drawStrongBox(gcbuf,5,3,TOP_LEFT);
-    // drawStrongBox(gcbuf,5,3,TOP_CENTER);
-    // drawStrongBox(gcbuf,5,3,TOP_RIGHT);
-    // drawStrongBox(gcbuf,5,3,CENTER_LEFT);
-    // drawStrongBoxWithOffset(gcbuf,10,3,CENTER, -5, 0);
-    // drawStrongBoxWithOffset(gcbuf,5,3,CENTER, 5, 0);
-    // drawStrongBox(gcbuf,5,3,CENTER_RIGHT);
-    // drawStrongBox(gcbuf,5,3,BOTTOM_LEFT);
-    // drawStrongBox(gcbuf,5,3,BOTTOM_CENTER);
-    // drawStrongBox(gcbuf,5,3,BOTTOM_RIGHT);
-    // drawText(gcbuf,"Test",CENTER);
-    // drawTextWithOffset(gcbuf,"Test",CENTER, -5, 0);
-
     char conn_infos[50];
     snprintf(conn_infos, 50, "Connecté à %s:%d", inet_ntoa(srv.sin_addr), srv.sin_port);
     drawTextWithOffset(gcbuf, conn_infos, BOTTOM_RIGHT, -1, 0);
@@ -63,12 +51,8 @@ void frameContent(GridCharBuffer* gcbuf) {
     {
     case USER_CREATION_MENU:
         drawTitleWithOffset(gcbuf, CENTER, -10, 0);
-        // drawTextWithOffset(gcbuf,"Network Awalé",CENTER, -10, 0);
-        // drawStrongBoxWithOffset(gcbuf,58,5,CENTER, -10, 0);
-
         drawTextWithOffset(gcbuf,"Bienvenue",CENTER, 0, 0);
-
-        drawTextWithOffset(gcbuf,"Votre pseudonyme (<ENTREE> pour valider):",CENTER, 2, 0);
+        drawTextWithOffset(gcbuf,"Votre pseudonyme (<ENTRÉE> pour valider):",CENTER, 2, 0);
         drawBoxWithOffset(gcbuf, 30, 1, CENTER, 4, 0);
         drawTextWithOffset(gcbuf,user_pseudo_buf,CENTER, 4, 0);
         setCursorPosRelative(gcbuf, CENTER, 4, 0);
@@ -76,6 +60,12 @@ void frameContent(GridCharBuffer* gcbuf) {
     
     default:
         break;
+    }
+
+    if (display_color_test) {
+        drawSolidRect(gcbuf, 0, 0, gcbuf->rows, gcbuf->cols, 0);
+        drawDebugColors(gcbuf);
+        setCursorPosRelative(gcbuf, BOTTOM_RIGHT, 0, 0);
     }
 }
 
@@ -97,6 +87,9 @@ void processEvents(struct pollfd pfds[2]) {
         case CTRL_KEY('c'):
             terminalClearScreen();
             exit(0);
+            break;
+        case CTRL_KEY('t'):
+            display_color_test = ~display_color_test;
             break;
         }
     }

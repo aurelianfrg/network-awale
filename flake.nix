@@ -15,6 +15,7 @@
       packages = [
         pkgs.libgcc
         pkgs.gnumake
+        pkgs.gdb
         # Add other C development packages as needed
       ];
       shellHook = ''

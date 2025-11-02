@@ -1,6 +1,6 @@
 # ================= Options de compilation =================
 GCC = gcc
-CCFLAGS = -ansi -pedantic -Wall -std=c17 #-g -D MAP
+CCFLAGS = -ansi -pedantic -Wall -std=c17 -g #-g -D MAP
 #LIBS = -lm
 
 # ================= Localisations =================

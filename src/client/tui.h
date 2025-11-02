@@ -67,28 +67,29 @@ typedef struct TuiState {
     TerminalConfig term_config;
 } TuiState;
 
-typedef enum CellCharStyle {
-    NO_STYLE,
+typedef enum CellCharStyleFlags {
+    // 8 flags max
+    FG_COLOR, // Si marqué, la couleur sera prise de fg_color_code
+    BG_COLOR, // Si marqué, la couleur sera prise de bg_color_code
     BOLD,
     FAINT,
-    ITALIC,
+    ITALIC, // des fois, italique s'affiche comme inverse
     UNDERLINE,
-    BLINKING,
-    REVERSE,
-    STRIKETROUGH
-} CellCharStyle;
+    STRIKETHROUGH,
+    INVERSE,
+} CellCharStyleFlags;
 
+// Les couleurs
 typedef struct CellChar {
-    char cell[4];
-    char size;
-    char fgColorCode;
-    char bgColorCode;
-    CellCharStyle style;
+    // On veut garder une cellule assez petite en mémoire -> 64 bits
+    char chr[4];       // 32 bits -> pour n'importe quel caractère unicode
+    char style;         // 8 bits -> les 8 flags de style
+    char fg_color_code;   // 8 bits -> code couleur https://gist.github.com/ConnerWill/d4b6c776b509add763e17f9f113fd25b#256-colors
+    char bg_color_code;   // 8 bits -> code couleur https://gist.github.com/ConnerWill/d4b6c776b509add763e17f9f113fd25b#256-colors
 } CellChar;
 
 typedef struct GridCharBuffer {
     CellChar** buf;
-    int byte_size;
     int cols;
     int rows;
 } GridCharBuffer;
@@ -110,8 +111,13 @@ void initApplication();
 // GRIDCHARBUFFER
 GridCharBuffer* createGcbuf(int rows, int cols);
 void freeGcbuf(GridCharBuffer* gcbuf);
-void putGcbuf(GridCharBuffer* gcbuf, int row, int col, char* s, int bytes);
+void putGcbuf(GridCharBuffer* gcbuf, int row, int col, char* s, int bytes, char style, char fg_color_code, char bg_color_code);
 void flushFrame(GridCharBuffer* gcbuf);
+int getFlagState(char source, char flag_pos);
+void setFlagState(char* source, char flag_pos, char state);
+char mkStyleFlags(const CellCharStyleFlags flags[], int flag_n);
+int getCellCharSize(CellChar* cell_char);
+int getGcbufSize(GridCharBuffer* gcbuf);
 
 // INPUT
 void processKeypress();
@@ -126,8 +132,11 @@ void drawFrameDebug();
 void frameContent(GridCharBuffer* gcbuf);
 void getDrawPosition(int* offset_row, int* offset_col, ScreenPos pos, GridCharBuffer* gcbuf, int width, int height);
 
+size_t u_strlen(char *s);
+size_t u_charlen(char *s);
 // DRAW
-void drawRows(GridCharBuffer* gcbuf);
+void drawDebugColors(GridCharBuffer* gcbuf);
+void drawSolidRect(GridCharBuffer* gcbuf, int start_row, int start_col, int end_row, int end_col, char color_code);
 void drawBox(GridCharBuffer* gcbuf, int width, int height, ScreenPos pos); 
 void drawBoxWithOffset(GridCharBuffer* gcbuf, int width, int height, ScreenPos pos, int offset_row, int offset_col); 
 void drawStrongBox(GridCharBuffer* gcbuf, int width, int height, ScreenPos pos); 

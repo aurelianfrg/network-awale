@@ -17,6 +17,7 @@ void die(const char *s) {
     write(STDOUT_FILENO, "\r\n", 2);
     exit(1);
 }
+
 void dieNoError(const char *s) {
     terminalClearScreen();
     write(STDOUT_FILENO, s, strlen(s));
@@ -160,8 +161,7 @@ void initApplication() {
     app_state.cursorx = 0;
     app_state.cursory = 0;
     app_state.term_config = *initTerminal();
-    // signal(SIGWINCH, handleResize);
-
+    // Set signal handling
     struct sigaction sa;
     sa.sa_handler = handleResize;
     sigemptyset(&sa.sa_mask);
@@ -239,17 +239,11 @@ void editorMoveCursor(int key) {
 // ========= OUTPUT ==========
 
 void drawFrame() {
+    // Resize if needed
     if (resize_pending) {
         resize_pending = 0;
         if (getWindowSize(&app_state.term_config.screenrows, &app_state.term_config.screencols) == -1) die("getWindowSize");
     }
-    sigset_t x,old;
-    sigemptyset(&x);
-    sigaddset(&x, SIGWINCH);
-    int ret = sigprocmask(SIG_BLOCK, &x, &old);
-    printf("is SIGWINCH in mask ? %d\n", sigismember(&old, SIGWINCH));
-    printf("ret=%d\n", ret);
-
     // Prepare frame
     GridCharBuffer* gcbuf = createGcbuf(app_state.term_config.screenrows, app_state.term_config.screencols);
 
@@ -257,6 +251,11 @@ void drawFrame() {
     frameContent(gcbuf);
 
     // flush frame
+    // Block SIGWINCH calls during frame flushing
+    sigset_t x,old;
+    sigemptyset(&x);
+    sigaddset(&x, SIGWINCH);
+    int ret = sigprocmask(SIG_BLOCK, &x, &old);
     flushFrame(gcbuf);
     freeGcbuf(gcbuf);
     sigprocmask(SIG_UNBLOCK, &x, NULL);
@@ -285,12 +284,10 @@ GridCharBuffer* createGcbuf(int rows, int cols) {
     gcbuf->buf = buf;
     gcbuf->cols = cols;
     gcbuf->rows = rows;
-    gcbuf->byte_size = 0;
     for (int row=0; row<rows; row++) {
         buf[row] = (CellChar*)malloc(sizeof(CellChar)*cols);
         for (int col=0; col<cols; col++) {
-            gcbuf->buf[row][col].size = 0;
-            putGcbuf(gcbuf, row, col, " ", 1);
+            putGcbuf(gcbuf, row, col, " ", 1, 0, 0, 0);
         }
     }
     return gcbuf;
@@ -302,51 +299,123 @@ void freeGcbuf(GridCharBuffer* gcbuf) {
     free(gcbuf);
 }
 
-void putGcbuf(GridCharBuffer* gcbuf, int row, int col, char* s, int bytes) {
+void putGcbuf(GridCharBuffer* gcbuf, int row, int col, char* s, int bytes, char style, char fg_color_code, char bg_color_code) {
+    // Some error handling
     if (row > gcbuf->rows-1 || col > gcbuf->cols-1) return;
     if (row < 0 || col < 0) return;
 
-    gcbuf->byte_size += bytes - gcbuf->buf[row][col].size;
-    gcbuf->buf[row][col].size = bytes;
+    gcbuf->buf[row][col].style = style;
+    gcbuf->buf[row][col].bg_color_code = bg_color_code;
+    gcbuf->buf[row][col].fg_color_code = fg_color_code;
     for (int j=0; j<bytes; j++)
-        gcbuf->buf[row][col].cell[j] = s[j];
+        gcbuf->buf[row][col].chr[j] = s[j];
+}
+
+int getFlagState(char source, char flagPos) {
+    int mask = 1<<flagPos;
+    return (source & mask) >> flagPos;
+}
+
+void setFlagState(char* source, char flagPos, char state) {
+    int mask = 1<<flagPos;
+    if (state)
+        *source = source || mask;
+    else
+        *source = source && ~mask;
+}
+
+char mkStyleFlags(const CellCharStyleFlags flags[], int flag_n) {
+    char style=0; // tous les flags baissés
+    for (int i=0; i<flag_n; i++)
+        style += 1<<flags[i];
+    return style;
+}
+
+int getGcbufSize(GridCharBuffer* gcbuf) {
+    int size = 0;
+    for (int row=0; row<gcbuf->rows; row++) {
+        for (int col=0; col<gcbuf->cols; col++) {
+            size += getCellCharSize(&(gcbuf->buf[row][col]));
+        }
+    }
+    return size;
+}
+
+int getCellCharSize(CellChar* cell_char) {
+    int size = (int)u_charlen(cell_char->chr);
+    int style_size = 2; // éventuel [0
+    if (getFlagState(cell_char->style, FG_COLOR)) style_size += 9;  // [38;5;xxx
+    if (getFlagState(cell_char->style, BG_COLOR)) style_size += 9;  // [48;5;xxx
+    if (getFlagState(cell_char->style, BOLD)) style_size += 2;      // [1
+    if (getFlagState(cell_char->style, FAINT)) style_size += 2;     // [2
+    if (getFlagState(cell_char->style, ITALIC)) style_size += 2;    // [3
+    if (getFlagState(cell_char->style, UNDERLINE)) style_size += 2; // [4
+    if (getFlagState(cell_char->style, STRIKETHROUGH)) style_size += 2;     // [5
+    if (getFlagState(cell_char->style, INVERSE)) style_size += 2;   // [7
+    if (style_size) style_size += 2;                                // \033...m
+    return size + style_size;
+    // Plus d'optimisation d'espace est possible en calculant la taille en octets de la valeurs du bg et fg
 }
 
 void flushFrame(GridCharBuffer* gcbuf) {
     // Compute char_buf byte size and malloc
-    int BUFFER_START_OVERHEAD_COST = 9;
-    int BUFFER_END_OVERHEAD_COST = 50;
+    int BUFFER_START_OVERHEAD_COST = 13;
+    int BUFFER_END_OVERHEAD_COST = 30;
     int ROW_OVERHEAD_COST = 5;
     char BUFFER_START_OVERHEAD_VAL[BUFFER_START_OVERHEAD_COST+1];
     char BUFFER_END_OVERHEAD_VAL[BUFFER_END_OVERHEAD_COST+1];
     char ROW_OVERHEAD_VAL[ROW_OVERHEAD_COST+1];
-    strcpy(BUFFER_START_OVERHEAD_VAL, "\x1b[?25l\x1b[H"); // Hide cursor and reset its position
-    char tmp_buf[BUFFER_END_OVERHEAD_COST];
-    snprintf(tmp_buf, BUFFER_END_OVERHEAD_COST, "\x1b[?25h\x1b[%d;%dH", app_state.cursory + 1, app_state.cursorx + 1); // Show cursor and move it
-    strcpy(BUFFER_END_OVERHEAD_VAL, tmp_buf);
+    strcpy(BUFFER_START_OVERHEAD_VAL, "\x1b[?25l\x1b[H\x1b[0m"); // Hide cursor and reset its position
+    snprintf(BUFFER_END_OVERHEAD_VAL, BUFFER_END_OVERHEAD_COST, "\x1b[?25h\x1b[%d;%dH", app_state.cursory + 1, app_state.cursorx + 1); // Show cursor and move it
     BUFFER_END_OVERHEAD_COST = strlen(BUFFER_END_OVERHEAD_VAL);
-    strcpy(ROW_OVERHEAD_VAL, "\x1b[K\r\n"); // Clear line and goto next line
+    strcpy(ROW_OVERHEAD_VAL, "\x1b[K\r\n"); // Clear end of line and goto next line
+    int gcbuf_size = 0;
     int char_buf_byte_size = 
-        gcbuf->byte_size + 
+        getGcbufSize(gcbuf) + 
         ROW_OVERHEAD_COST*gcbuf->rows + 
         BUFFER_START_OVERHEAD_COST +
         BUFFER_END_OVERHEAD_COST;
     char* char_buf = (char*)malloc(sizeof(char)*char_buf_byte_size);
-
-    //char* char_buf = (char*)malloc(sizeof(char)*char_buf_byte_size);
 
     // Fill char buffer and flush
     int i=0;
     for (int j=0; j<BUFFER_START_OVERHEAD_COST; j++) 
         char_buf[i+j] = BUFFER_START_OVERHEAD_VAL[j];
     i += BUFFER_START_OVERHEAD_COST;
+    char prev_style = 0;
+    char prev_fg_color = 0;
+    char prev_bg_color = 0;
 
     for (int row=0; row<gcbuf->rows; row++) {
         for (int col=0; col<gcbuf->cols; col++)  {
-            for (int j=0; j<gcbuf->buf[row][col].size; j++)
-                char_buf[i+j] = gcbuf->buf[row][col].cell[j];
-            i += gcbuf->buf[row][col].size;   
-            //printf("i=%d | size=%d\r\n", i, gcbuf->buf[row][col].size);           
+            if (prev_style != gcbuf->buf[row][col].style || 
+                getFlagState(gcbuf->buf[row][col].style, FG_COLOR) && prev_fg_color != gcbuf->buf[row][col].fg_color_code ||
+                getFlagState(gcbuf->buf[row][col].style, BG_COLOR) && prev_bg_color != gcbuf->buf[row][col].bg_color_code) 
+            {
+                char style_buf[34]; // Taille maximale du buffer si tous les styles sont mit + reset sequence
+                int offset = sprintf(style_buf, "\x1b[0");
+                if (getFlagState(gcbuf->buf[row][col].style, FG_COLOR)) offset += sprintf(style_buf+offset, ";38;5;%d", gcbuf->buf[row][col].fg_color_code);
+                if (getFlagState(gcbuf->buf[row][col].style, BG_COLOR)) offset += sprintf(style_buf+offset, ";48;5;%d", gcbuf->buf[row][col].bg_color_code);
+                if (getFlagState(gcbuf->buf[row][col].style, BOLD)) offset += sprintf(style_buf+offset, ";1");
+                if (getFlagState(gcbuf->buf[row][col].style, FAINT)) offset += sprintf(style_buf+offset, ";2");
+                if (getFlagState(gcbuf->buf[row][col].style, ITALIC)) offset += sprintf(style_buf+offset, ";3");
+                if (getFlagState(gcbuf->buf[row][col].style, UNDERLINE)) offset += sprintf(style_buf+offset, ";4");
+                if (getFlagState(gcbuf->buf[row][col].style, STRIKETHROUGH)) offset += sprintf(style_buf+offset, ";9");
+                if (getFlagState(gcbuf->buf[row][col].style, INVERSE)) offset += sprintf(style_buf+offset, ";7");
+                offset += sprintf(style_buf+offset, "m");
+                for (int j=0; j<offset; j++)
+                    char_buf[i+j] = style_buf[j];
+                i += offset;
+                printf("Let's print some style @%d,%d size=%d\r\n", row, col, offset);
+            }
+            prev_style = gcbuf->buf[row][col].style;
+            prev_fg_color = gcbuf->buf[row][col].fg_color_code;
+            prev_bg_color = gcbuf->buf[row][col].bg_color_code;
+
+            int size = u_charlen(gcbuf->buf[row][col].chr);
+            for (int j=0; j<size; j++)
+                char_buf[i+j] = gcbuf->buf[row][col].chr[j];
+            i += size;   
         }
         for (int j=0; j<ROW_OVERHEAD_COST; j++)
             char_buf[i+j] = ROW_OVERHEAD_VAL[j];
@@ -358,6 +427,11 @@ void flushFrame(GridCharBuffer* gcbuf) {
     for (int j=0; j<BUFFER_END_OVERHEAD_COST; j++) 
         char_buf[i+j] = BUFFER_END_OVERHEAD_VAL[j];
     i += BUFFER_END_OVERHEAD_COST;
+
+    if (i>char_buf_byte_size) {
+        printf("i=%d et char_buf_byte_size=%d\r\n", i, char_buf_byte_size);
+        die("\r\ni est plus grand que char_buf_byte_size");
+    }
 
     write(STDOUT_FILENO, char_buf, i);
     free(char_buf);
@@ -375,7 +449,6 @@ void setCursorPosRelative(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, 
 }
 
 void getDrawPosition(int* offset_row, int* offset_col, ScreenPos pos, GridCharBuffer* gcbuf, int width, int height) {
-    printf("Woho, getDrawOffset %d\r\n", pos);
     switch (pos) {
     case TOP_LEFT:
         *offset_row = 0;
@@ -441,22 +514,21 @@ void drawBoxWithOffset(GridCharBuffer* gcbuf, int width, int height, ScreenPos p
                 if (col==0) strcpy(box_drawing_char, "┌");
                 else if (col==width+1) strcpy(box_drawing_char, "┐");
                 else strcpy(box_drawing_char, "─");
-                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, 0, 0, 0);
             }
             else if (row==height+1) {
                 if (col==0) strcpy(box_drawing_char, "└");
                 else if (col==width+1) strcpy(box_drawing_char, "┘");
                 else strcpy(box_drawing_char, "─");
-                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, 0, 0, 0);
             }
             else if (col==0 || col==width+1) {
                 strcpy(box_drawing_char, "│");
-                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, 0, 0, 0);
             }
         }
     }
 }
-
 
 void drawStrongBox(GridCharBuffer* gcbuf, int width, int height, ScreenPos pos) {
     drawStrongBoxWithOffset(gcbuf, width, height, pos, 0, 0);
@@ -476,17 +548,17 @@ void drawStrongBoxWithOffset(GridCharBuffer* gcbuf, int width, int height, Scree
                 if (col==0) strcpy(box_drawing_char, "╔");
                 else if (col==width+1) strcpy(box_drawing_char, "╗");
                 else strcpy(box_drawing_char, "═");
-                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, 0, 0, 0);
             }
             else if (row==height+1) {
                 if (col==0) strcpy(box_drawing_char, "╚");
                 else if (col==width+1) strcpy(box_drawing_char, "╝");
                 else strcpy(box_drawing_char, "═");
-                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, 0, 0, 0);
             }
             else if (col==0 || col==width+1) {
                 strcpy(box_drawing_char, "║");
-                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, 0, 0, 0);
             }
         }
     }
@@ -507,15 +579,15 @@ size_t u_charlen(char *s)
     unsigned char c = (unsigned char)*s;
 
     if (c < 0x80)        // 0xxxxxxx → ASCII (1 octet)
-        return 1;
+        return (size_t)1;
     else if ((c >> 5) == 0x6)  // 110xxxxx → 2 octets
-        return 2;
+        return (size_t)2;
     else if ((c >> 4) == 0xE)  // 1110xxxx → 3 octets
-        return 3;
+        return (size_t)3;
     else if ((c >> 3) == 0x1E) // 11110xxx → 4 octets
-        return 4;
+        return (size_t)4;
     else
-        return 1;  // caractère invalide ou continuation → on renvoie 1 par défaut
+        return (size_t)1;  // caractère invalide ou continuation → on renvoie 1 par défaut
 }
 
 void drawText(GridCharBuffer* gcbuf, char* txt, ScreenPos pos) {
@@ -532,20 +604,66 @@ void drawTextWithOffset(GridCharBuffer* gcbuf, char* txt, ScreenPos pos, int off
     int j=0;
     while (txt[j]!='\0') {
         int char_size = u_charlen(&txt[j]);
-        putGcbuf(gcbuf, pos_row, pos_col+i, &txt[j], char_size);
+        putGcbuf(gcbuf, pos_row, pos_col+i, &txt[j], char_size, 0, 0, 0);
         i++;
         j+=char_size;
     }
 }
 
-void drawRows(GridCharBuffer* gcbuf) {
-    for (int row = 0; row < gcbuf->rows; row++)
-        putGcbuf(gcbuf, row, 0, "~", 1);
+void drawDebugColors(GridCharBuffer* gcbuf) {
+    int COLOR_MAX = 256;
+    int COL_WIDTH = 15;
+    int row=1;
+    int col=0;
+    int color = 0;
+    CellCharStyleFlags flags1[] = { FG_COLOR };
+    CellCharStyleFlags flags2[] = { FG_COLOR, BOLD };
+    CellCharStyleFlags flags3[] = { FG_COLOR, FAINT };
+    CellCharStyleFlags flags4[] = { FAINT };
+    CellCharStyleFlags flags9[] = { BOLD };
+    CellCharStyleFlags flags10[] = { 0 };
+    CellCharStyleFlags flags5[] = { BG_COLOR };
+    CellCharStyleFlags flags6[] = { BG_COLOR, FG_COLOR };
+    CellCharStyleFlags flags7[] = { ITALIC, UNDERLINE };
+    CellCharStyleFlags flags8[] = { STRIKETHROUGH, INVERSE };
+    drawTextWithOffset(gcbuf, "Color codes:", TOP_LEFT, 0, 0);
+    while (color < COLOR_MAX) {
+        char buf[4];
+        sprintf(buf, "%d", color);
+        drawTextWithOffset(gcbuf, buf, TOP_LEFT, row, col);
+        putGcbuf(gcbuf, row, col+3, "a", 1, mkStyleFlags(flags1, 1), color, color);
+        putGcbuf(gcbuf, row, col+4, "a", 1, mkStyleFlags(flags2, 2), color, color);
+        putGcbuf(gcbuf, row, col+5, "a", 1, mkStyleFlags(flags3, 2), color, color);
+        putGcbuf(gcbuf, row, col+6, "a", 1, mkStyleFlags(flags4, 1), color, color);
+        putGcbuf(gcbuf, row, col+7, "a", 1, mkStyleFlags(flags9, 1), color, color);
+        putGcbuf(gcbuf, row, col+8, "a", 1, mkStyleFlags(flags10, 0), color, color);
+        putGcbuf(gcbuf, row, col+9, "a", 1, mkStyleFlags(flags5, 1), color, color);
+        putGcbuf(gcbuf, row, col+10, "a", 1, mkStyleFlags(flags6, 2), color, color);
+        putGcbuf(gcbuf, row, col+11, "a", 1, mkStyleFlags(flags7, 2), color, color);
+        putGcbuf(gcbuf, row, col+12, "a", 1, mkStyleFlags(flags8, 2), color, color);
+        color++;
+        row++;
+
+        if (row >= gcbuf->rows) {
+            row=0;
+            col+=COL_WIDTH;
+        }
+    }
+}
+
+void drawSolidRect(GridCharBuffer* gcbuf, int start_row, int start_col, int end_row, int end_col, char color_code) {
+    for (int row=start_row; row < end_row; row++) {
+        for (int col=start_col; col < end_col; col++) {
+            CellCharStyleFlags style[] = { FG_COLOR, BG_COLOR };
+            putGcbuf(gcbuf, row, col, " ", 1, mkStyleFlags(style, 2), color_code, color_code);
+        }
+    }
 }
 
 void drawTitle(GridCharBuffer* gcbuf, ScreenPos pos) {
     drawTitleWithOffset(gcbuf, pos, 0, 0);
 }
+
 void drawTitleWithOffset(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col) {
     int logo_var = 4;
     switch (logo_var)
