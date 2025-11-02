@@ -44,18 +44,18 @@ int main(int argc, char **argv) {
 void frameContent(GridCharBuffer* gcbuf) {
     char conn_infos[50];
     snprintf(conn_infos, 50, "Connecté à %s:%d", inet_ntoa(srv.sin_addr), srv.sin_port);
-    drawTextWithOffset(gcbuf, conn_infos, BOTTOM_RIGHT, -1, 0);
-    drawTextWithOffset(gcbuf, "Ctrl-C pour quitter", BOTTOM_LEFT, -1, 0);
+    drawText(gcbuf, BOTTOM_RIGHT, -1, 0, conn_infos);
+    drawText(gcbuf, BOTTOM_LEFT, -1, 0, "Ctrl-C pour quitter");
 
     switch (navigationState)
     {
     case USER_CREATION_MENU:
-        drawTitleWithOffset(gcbuf, CENTER, -10, 0);
-        drawTextWithOffset(gcbuf,"Bienvenue",CENTER, 0, 0);
-        drawTextWithOffset(gcbuf,"Votre pseudonyme (<ENTRÉE> pour valider):",CENTER, 2, 0);
-        drawBoxWithOffset(gcbuf, 30, 1, CENTER, 4, 0);
-        drawTextWithOffset(gcbuf,user_pseudo_buf,CENTER, 4, 0);
-        setCursorPosRelative(gcbuf, CENTER, 4, 0);
+        drawTitle(gcbuf, CENTER, -5, 0);
+        drawText(gcbuf,CENTER, 5, 0, "Bienvenue");
+        drawText(gcbuf,CENTER, 7, 0, "Votre pseudonyme !{if}(<ENTRÉE> pour valider)!{r}:");
+        drawBox(gcbuf, CENTER, 9, 0, 30, 1);
+        drawText(gcbuf,CENTER, 9, 0, user_pseudo_buf);
+        setCursorPosRelative(gcbuf, CENTER, 9, 0);
         break;
     
     default:

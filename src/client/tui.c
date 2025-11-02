@@ -7,6 +7,9 @@
 volatile sig_atomic_t resize_pending = 0;
 TerminalConfig term_config;
 
+const TextStyle _NO_STYLE = {0,0,0};
+const TextStyle* NO_STYLE = &_NO_STYLE;
+
 void handleResize(int sig) {
     resize_pending = 1;
 }
@@ -256,6 +259,7 @@ void drawFrame() {
     sigemptyset(&x);
     sigaddset(&x, SIGWINCH);
     int ret = sigprocmask(SIG_BLOCK, &x, &old);
+    // exit(1);
     flushFrame(gcbuf);
     freeGcbuf(gcbuf);
     sigprocmask(SIG_UNBLOCK, &x, NULL);
@@ -287,7 +291,7 @@ GridCharBuffer* createGcbuf(int rows, int cols) {
     for (int row=0; row<rows; row++) {
         buf[row] = (CellChar*)malloc(sizeof(CellChar)*cols);
         for (int col=0; col<cols; col++) {
-            putGcbuf(gcbuf, row, col, " ", 1, 0, 0, 0);
+            putGcbuf(gcbuf, row, col, " ", 1, NO_STYLE);
         }
     }
     return gcbuf;
@@ -299,16 +303,16 @@ void freeGcbuf(GridCharBuffer* gcbuf) {
     free(gcbuf);
 }
 
-void putGcbuf(GridCharBuffer* gcbuf, int row, int col, char* s, int bytes, char style, char fg_color_code, char bg_color_code) {
+void putGcbuf(GridCharBuffer* gcbuf, int row, int col, char* s, int bytes, TextStyle* style) {
     // Some error handling
     if (row > gcbuf->rows-1 || col > gcbuf->cols-1) return;
     if (row < 0 || col < 0) return;
 
-    gcbuf->buf[row][col].style = style;
-    gcbuf->buf[row][col].bg_color_code = bg_color_code;
-    gcbuf->buf[row][col].fg_color_code = fg_color_code;
+    gcbuf->buf[row][col].style.flags = style->flags;
+    gcbuf->buf[row][col].style.bg_color_code = style->bg_color_code;
+    gcbuf->buf[row][col].style.fg_color_code = style->fg_color_code;
     for (int j=0; j<bytes; j++)
-        gcbuf->buf[row][col].chr[j] = s[j];
+        gcbuf->buf[row][col].uchar[j] = s[j];
 }
 
 int getFlagState(char source, char flagPos) {
@@ -324,11 +328,21 @@ void setFlagState(char* source, char flagPos, char state) {
         *source = source && ~mask;
 }
 
-char mkStyleFlags(const CellCharStyleFlags flags[], int flag_n) {
+char mkStyleFlags(int flag_count,...) {
     char style=0; // tous les flags baissés
-    for (int i=0; i<flag_n; i++)
-        style += 1<<flags[i];
+    if (flag_count) {
+        va_list args; va_start(args, flag_count);
+        for (int i = 0; i < flag_count; i++) {
+            TextStyleFlags flag = va_arg(args, TextStyleFlags);
+            style += 1<<flag;
+        }
+        va_end(args);
+    }
     return style;
+}
+
+char addStyleFlag(char style_flags, TextStyleFlags flag) {
+    return style_flags | (1<<flag);
 }
 
 int getGcbufSize(GridCharBuffer* gcbuf) {
@@ -341,18 +355,22 @@ int getGcbufSize(GridCharBuffer* gcbuf) {
     return size;
 }
 
+int getTextStyleSize(TextStyle* text_style) {
+    int style_size = 4; // \033...m et éventuel [0
+    if (getFlagState(text_style->flags, FG_COLOR)) style_size += 9;  // [38;5;xxx
+    if (getFlagState(text_style->flags, BG_COLOR)) style_size += 9;  // [48;5;xxx
+    if (getFlagState(text_style->flags, BOLD)) style_size += 2;      // [1
+    if (getFlagState(text_style->flags, FAINT)) style_size += 2;     // [2
+    if (getFlagState(text_style->flags, ITALIC)) style_size += 2;    // [3
+    if (getFlagState(text_style->flags, UNDERLINE)) style_size += 2; // [4
+    if (getFlagState(text_style->flags, STRIKETHROUGH)) style_size += 2;     // [5
+    if (getFlagState(text_style->flags, INVERSE)) style_size += 2;   // [7
+    return style_size;
+}
+
 int getCellCharSize(CellChar* cell_char) {
-    int size = (int)u_charlen(cell_char->chr);
-    int style_size = 2; // éventuel [0
-    if (getFlagState(cell_char->style, FG_COLOR)) style_size += 9;  // [38;5;xxx
-    if (getFlagState(cell_char->style, BG_COLOR)) style_size += 9;  // [48;5;xxx
-    if (getFlagState(cell_char->style, BOLD)) style_size += 2;      // [1
-    if (getFlagState(cell_char->style, FAINT)) style_size += 2;     // [2
-    if (getFlagState(cell_char->style, ITALIC)) style_size += 2;    // [3
-    if (getFlagState(cell_char->style, UNDERLINE)) style_size += 2; // [4
-    if (getFlagState(cell_char->style, STRIKETHROUGH)) style_size += 2;     // [5
-    if (getFlagState(cell_char->style, INVERSE)) style_size += 2;   // [7
-    if (style_size) style_size += 2;                                // \033...m
+    int size = (int)u_charlen(cell_char->uchar);
+    int style_size = getTextStyleSize(&cell_char->style);
     return size + style_size;
     // Plus d'optimisation d'espace est possible en calculant la taille en octets de la valeurs du bg et fg
 }
@@ -382,39 +400,38 @@ void flushFrame(GridCharBuffer* gcbuf) {
     for (int j=0; j<BUFFER_START_OVERHEAD_COST; j++) 
         char_buf[i+j] = BUFFER_START_OVERHEAD_VAL[j];
     i += BUFFER_START_OVERHEAD_COST;
-    char prev_style = 0;
+    char prev_style_flags = 0;
     char prev_fg_color = 0;
     char prev_bg_color = 0;
 
     for (int row=0; row<gcbuf->rows; row++) {
         for (int col=0; col<gcbuf->cols; col++)  {
-            if (prev_style != gcbuf->buf[row][col].style || 
-                getFlagState(gcbuf->buf[row][col].style, FG_COLOR) && prev_fg_color != gcbuf->buf[row][col].fg_color_code ||
-                getFlagState(gcbuf->buf[row][col].style, BG_COLOR) && prev_bg_color != gcbuf->buf[row][col].bg_color_code) 
+            if (prev_style_flags != gcbuf->buf[row][col].style.flags || 
+                getFlagState(gcbuf->buf[row][col].style.flags, FG_COLOR) && prev_fg_color != gcbuf->buf[row][col].style.fg_color_code ||
+                getFlagState(gcbuf->buf[row][col].style.flags, BG_COLOR) && prev_bg_color != gcbuf->buf[row][col].style.bg_color_code) 
             {
                 char style_buf[34]; // Taille maximale du buffer si tous les styles sont mit + reset sequence
                 int offset = sprintf(style_buf, "\x1b[0");
-                if (getFlagState(gcbuf->buf[row][col].style, FG_COLOR)) offset += sprintf(style_buf+offset, ";38;5;%d", gcbuf->buf[row][col].fg_color_code);
-                if (getFlagState(gcbuf->buf[row][col].style, BG_COLOR)) offset += sprintf(style_buf+offset, ";48;5;%d", gcbuf->buf[row][col].bg_color_code);
-                if (getFlagState(gcbuf->buf[row][col].style, BOLD)) offset += sprintf(style_buf+offset, ";1");
-                if (getFlagState(gcbuf->buf[row][col].style, FAINT)) offset += sprintf(style_buf+offset, ";2");
-                if (getFlagState(gcbuf->buf[row][col].style, ITALIC)) offset += sprintf(style_buf+offset, ";3");
-                if (getFlagState(gcbuf->buf[row][col].style, UNDERLINE)) offset += sprintf(style_buf+offset, ";4");
-                if (getFlagState(gcbuf->buf[row][col].style, STRIKETHROUGH)) offset += sprintf(style_buf+offset, ";9");
-                if (getFlagState(gcbuf->buf[row][col].style, INVERSE)) offset += sprintf(style_buf+offset, ";7");
+                if (getFlagState(gcbuf->buf[row][col].style.flags, FG_COLOR)) offset += sprintf(style_buf+offset, ";38;5;%d", gcbuf->buf[row][col].style.fg_color_code);
+                if (getFlagState(gcbuf->buf[row][col].style.flags, BG_COLOR)) offset += sprintf(style_buf+offset, ";48;5;%d", gcbuf->buf[row][col].style.bg_color_code);
+                if (getFlagState(gcbuf->buf[row][col].style.flags, BOLD)) offset += sprintf(style_buf+offset, ";1");
+                if (getFlagState(gcbuf->buf[row][col].style.flags, FAINT)) offset += sprintf(style_buf+offset, ";2");
+                if (getFlagState(gcbuf->buf[row][col].style.flags, ITALIC)) offset += sprintf(style_buf+offset, ";3");
+                if (getFlagState(gcbuf->buf[row][col].style.flags, UNDERLINE)) offset += sprintf(style_buf+offset, ";4");
+                if (getFlagState(gcbuf->buf[row][col].style.flags, STRIKETHROUGH)) offset += sprintf(style_buf+offset, ";9");
+                if (getFlagState(gcbuf->buf[row][col].style.flags, INVERSE)) offset += sprintf(style_buf+offset, ";7");
                 offset += sprintf(style_buf+offset, "m");
                 for (int j=0; j<offset; j++)
                     char_buf[i+j] = style_buf[j];
                 i += offset;
-                printf("Let's print some style @%d,%d size=%d\r\n", row, col, offset);
             }
-            prev_style = gcbuf->buf[row][col].style;
-            prev_fg_color = gcbuf->buf[row][col].fg_color_code;
-            prev_bg_color = gcbuf->buf[row][col].bg_color_code;
+            prev_style_flags = gcbuf->buf[row][col].style.flags;
+            prev_fg_color = gcbuf->buf[row][col].style.fg_color_code;
+            prev_bg_color = gcbuf->buf[row][col].style.bg_color_code;
 
-            int size = u_charlen(gcbuf->buf[row][col].chr);
+            int size = u_charlen(gcbuf->buf[row][col].uchar);
             for (int j=0; j<size; j++)
-                char_buf[i+j] = gcbuf->buf[row][col].chr[j];
+                char_buf[i+j] = gcbuf->buf[row][col].uchar[j];
             i += size;   
         }
         for (int j=0; j<ROW_OVERHEAD_COST; j++)
@@ -496,11 +513,7 @@ void getDrawPosition(int* offset_row, int* offset_col, ScreenPos pos, GridCharBu
 
 // ========= DRAW ========
 
-void drawBox(GridCharBuffer* gcbuf, int width, int height, ScreenPos pos) {
-    drawBoxWithOffset(gcbuf, width, height, pos, 0, 0);
-}
-
-void drawBoxWithOffset(GridCharBuffer* gcbuf, int width, int height, ScreenPos pos, int offset_row, int offset_col) { 
+void drawBox(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, int width, int height) { 
     // width and height are inset size
     int pos_row, pos_col;
     getDrawPosition(&pos_row, &pos_col, pos, gcbuf, width+2, height+2);
@@ -514,27 +527,23 @@ void drawBoxWithOffset(GridCharBuffer* gcbuf, int width, int height, ScreenPos p
                 if (col==0) strcpy(box_drawing_char, "┌");
                 else if (col==width+1) strcpy(box_drawing_char, "┐");
                 else strcpy(box_drawing_char, "─");
-                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, 0, 0, 0);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, NO_STYLE);
             }
             else if (row==height+1) {
                 if (col==0) strcpy(box_drawing_char, "└");
                 else if (col==width+1) strcpy(box_drawing_char, "┘");
                 else strcpy(box_drawing_char, "─");
-                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, 0, 0, 0);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, NO_STYLE);
             }
             else if (col==0 || col==width+1) {
                 strcpy(box_drawing_char, "│");
-                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, 0, 0, 0);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, NO_STYLE);
             }
         }
     }
 }
 
-void drawStrongBox(GridCharBuffer* gcbuf, int width, int height, ScreenPos pos) {
-    drawStrongBoxWithOffset(gcbuf, width, height, pos, 0, 0);
-}
-
-void drawStrongBoxWithOffset(GridCharBuffer* gcbuf, int width, int height, ScreenPos pos, int offset_row, int offset_col) { 
+void drawStrongBox(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, int width, int height) { 
     // width and height are inset size
     int pos_row, pos_col;
     getDrawPosition(&pos_row, &pos_col, pos, gcbuf, width+2, height+2);
@@ -548,17 +557,17 @@ void drawStrongBoxWithOffset(GridCharBuffer* gcbuf, int width, int height, Scree
                 if (col==0) strcpy(box_drawing_char, "╔");
                 else if (col==width+1) strcpy(box_drawing_char, "╗");
                 else strcpy(box_drawing_char, "═");
-                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, 0, 0, 0);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, NO_STYLE);
             }
             else if (row==height+1) {
                 if (col==0) strcpy(box_drawing_char, "╚");
                 else if (col==width+1) strcpy(box_drawing_char, "╝");
                 else strcpy(box_drawing_char, "═");
-                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, 0, 0, 0);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, NO_STYLE);
             }
             else if (col==0 || col==width+1) {
                 strcpy(box_drawing_char, "║");
-                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, 0, 0, 0);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, NO_STYLE);
             }
         }
     }
@@ -590,23 +599,107 @@ size_t u_charlen(char *s)
         return (size_t)1;  // caractère invalide ou continuation → on renvoie 1 par défaut
 }
 
-void drawText(GridCharBuffer* gcbuf, char* txt, ScreenPos pos) {
-    drawTextWithOffset(gcbuf, txt, pos, 0, 0);
-}
-
-void drawTextWithOffset(GridCharBuffer* gcbuf, char* txt, ScreenPos pos, int offset_row, int offset_col) {
-    int txt_width = u_strlen(txt);
+void drawText(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, const char* text) {
+    // Iterate the string to get its size and pos
+    int txt_width = u_strlen(text);
+    for (int i=0; text[i]!='\0'; i++) {
+        if (text[i]== '!' && text[i+1]=='{') {
+            i+=2;
+            txt_width -= 3;
+            while (text[i]!='}') {
+                switch (text[i]) {
+                case 'F': // Set fg, checks next 3 vals for color
+                case 'B': // Set bg, checks next 3 vals for color
+                    for (int j=1; j<4; j++)
+                        if (text[i+j]-'0'<0 || text[i+j]-'0'>9) die("F or B flag should be folled by 3 digits (drawText)");
+                    txt_width -= 4;
+                    i+=3;
+                    break;
+                case 'b': // Set to bold
+                case 'f': // Set to faint
+                case 'i': // Set to italic
+                case 'u': // Set to underline
+                case 'v': // Set to inverse
+                case 's': // Set to strikethrough
+                case 'r': // Clear all style
+                    txt_width -= 1;
+                    break;
+                default: // any other char, should not happen
+                    char buf[34];
+                    sprintf(buf, "Invalid text format: %c (drawText)", text[i]);
+                    dieNoError(buf);
+                    break;
+                }
+                i++;
+            }
+            i++;
+        }
+    }
     int pos_row, pos_col;
     getDrawPosition(&pos_row, &pos_col, pos, gcbuf, txt_width, 0);
     pos_row += offset_row;
     pos_col += offset_col;
+    int row = 0;
+    // Iterate again to build the result
+    TextStyle style = { 0, 0, 0 };
     int i=0;
-    int j=0;
-    while (txt[j]!='\0') {
-        int char_size = u_charlen(&txt[j]);
-        putGcbuf(gcbuf, pos_row, pos_col+i, &txt[j], char_size, 0, 0, 0);
-        i++;
-        j+=char_size;
+    while(text[i]!='\0') {
+        switch (text[i]){
+        case '!':
+            if (text[i+1]=='{') {
+                i+=2; // Skips "!{"
+                while (text[i]!='}') {
+                    switch (text[i]) {
+                    case 'F': // Set fg, checks next 3 vals for color
+                        style.fg_color_code = (text[i+1]-'0')*100 + (text[i+2]-'0')*10 + (text[i+3]-'0');
+                        style.flags = addStyleFlag(style.flags, FG_COLOR);
+                        i+=3;
+                        break;
+                    case 'B': // Set bg, checks next 3 vals for color
+                        style.bg_color_code = (text[i+1]-'0')*100 + (text[i+2]-'0')*10 + (text[i+3]-'0');
+                        style.flags = addStyleFlag(style.flags, BG_COLOR);
+                        i+=3;
+                        break;
+                    case 'b': // Set to bold
+                        style.flags = addStyleFlag(style.flags, BOLD);
+                        break;
+                    case 'f': // Set to faint
+                        style.flags = addStyleFlag(style.flags, FAINT);
+                        break;
+                    case 'i': // Set to italic
+                        style.flags = addStyleFlag(style.flags, ITALIC);
+                        break;
+                    case 'u': // Set to underline
+                        style.flags = addStyleFlag(style.flags, UNDERLINE);
+                        break;
+                    case 'v': // Set to inverse
+                        style.flags = addStyleFlag(style.flags, INVERSE);
+                        break;
+                    case 's': // Set to strikethrough
+                        style.flags = addStyleFlag(style.flags, STRIKETHROUGH);
+                        break;
+                    case 'r': // Clear all style
+                        style.flags = 0;
+                        break;
+                    }
+                    i++; // next symbol
+                }
+                i++; // Skips "}" 
+            }
+            else {
+                int char_size = u_charlen(&text[i]);
+                putGcbuf(gcbuf, pos_row, pos_col+row, &text[i], char_size, &style);
+                i+=char_size;
+                row++;
+            }
+            break;
+        default:
+            int char_size = u_charlen(&text[i]);
+            putGcbuf(gcbuf, pos_row, pos_col+row, &text[i], char_size, &style);
+            i+=char_size;
+            row++;
+            break;
+        }
     }
 }
 
@@ -616,31 +709,22 @@ void drawDebugColors(GridCharBuffer* gcbuf) {
     int row=1;
     int col=0;
     int color = 0;
-    CellCharStyleFlags flags1[] = { FG_COLOR };
-    CellCharStyleFlags flags2[] = { FG_COLOR, BOLD };
-    CellCharStyleFlags flags3[] = { FG_COLOR, FAINT };
-    CellCharStyleFlags flags4[] = { FAINT };
-    CellCharStyleFlags flags9[] = { BOLD };
-    CellCharStyleFlags flags10[] = { 0 };
-    CellCharStyleFlags flags5[] = { BG_COLOR };
-    CellCharStyleFlags flags6[] = { BG_COLOR, FG_COLOR };
-    CellCharStyleFlags flags7[] = { ITALIC, UNDERLINE };
-    CellCharStyleFlags flags8[] = { STRIKETHROUGH, INVERSE };
-    drawTextWithOffset(gcbuf, "Color codes:", TOP_LEFT, 0, 0);
+    drawText(gcbuf, TOP_LEFT, 0, 0, "Color codes:");
     while (color < COLOR_MAX) {
+        TextStyle style = { 0, color, color };
         char buf[4];
         sprintf(buf, "%d", color);
-        drawTextWithOffset(gcbuf, buf, TOP_LEFT, row, col);
-        putGcbuf(gcbuf, row, col+3, "a", 1, mkStyleFlags(flags1, 1), color, color);
-        putGcbuf(gcbuf, row, col+4, "a", 1, mkStyleFlags(flags2, 2), color, color);
-        putGcbuf(gcbuf, row, col+5, "a", 1, mkStyleFlags(flags3, 2), color, color);
-        putGcbuf(gcbuf, row, col+6, "a", 1, mkStyleFlags(flags4, 1), color, color);
-        putGcbuf(gcbuf, row, col+7, "a", 1, mkStyleFlags(flags9, 1), color, color);
-        putGcbuf(gcbuf, row, col+8, "a", 1, mkStyleFlags(flags10, 0), color, color);
-        putGcbuf(gcbuf, row, col+9, "a", 1, mkStyleFlags(flags5, 1), color, color);
-        putGcbuf(gcbuf, row, col+10, "a", 1, mkStyleFlags(flags6, 2), color, color);
-        putGcbuf(gcbuf, row, col+11, "a", 1, mkStyleFlags(flags7, 2), color, color);
-        putGcbuf(gcbuf, row, col+12, "a", 1, mkStyleFlags(flags8, 2), color, color);
+        drawText(gcbuf, TOP_LEFT, row, col, buf);
+        style.flags = mkStyleFlags(1, FG_COLOR);                putGcbuf(gcbuf, row, col+3, "a", 1, &style);
+        style.flags = mkStyleFlags(2, FG_COLOR, BOLD);          putGcbuf(gcbuf, row, col+4, "a", 1, &style);
+        style.flags = mkStyleFlags(2, FG_COLOR, FAINT);         putGcbuf(gcbuf, row, col+5, "a", 1, &style);
+        style.flags = mkStyleFlags(1, FAINT);                   putGcbuf(gcbuf, row, col+6, "a", 1, &style);
+        style.flags = mkStyleFlags(1, BOLD);                    putGcbuf(gcbuf, row, col+7, "a", 1, &style);
+        style.flags = mkStyleFlags(0);                          putGcbuf(gcbuf, row, col+8, "a", 1, &style);
+        style.flags = mkStyleFlags(1, BG_COLOR);                putGcbuf(gcbuf, row, col+9, "a", 1, &style);
+        style.flags = mkStyleFlags(2, BG_COLOR, FG_COLOR);      putGcbuf(gcbuf, row, col+10, "a", 1, &style);
+        style.flags = mkStyleFlags(2, ITALIC, UNDERLINE);       putGcbuf(gcbuf, row, col+11, "a", 1, &style);
+        style.flags = mkStyleFlags(2, STRIKETHROUGH, INVERSE);  putGcbuf(gcbuf, row, col+12, "a", 1, &style);
         color++;
         row++;
 
@@ -654,17 +738,13 @@ void drawDebugColors(GridCharBuffer* gcbuf) {
 void drawSolidRect(GridCharBuffer* gcbuf, int start_row, int start_col, int end_row, int end_col, char color_code) {
     for (int row=start_row; row < end_row; row++) {
         for (int col=start_col; col < end_col; col++) {
-            CellCharStyleFlags style[] = { FG_COLOR, BG_COLOR };
-            putGcbuf(gcbuf, row, col, " ", 1, mkStyleFlags(style, 2), color_code, color_code);
+            TextStyle style = {mkStyleFlags(2, FG_COLOR, BG_COLOR), color_code, color_code};
+            putGcbuf(gcbuf, row, col, " ", 1, &style);
         }
     }
 }
 
-void drawTitle(GridCharBuffer* gcbuf, ScreenPos pos) {
-    drawTitleWithOffset(gcbuf, pos, 0, 0);
-}
-
-void drawTitleWithOffset(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col) {
+void drawTitle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col) {
     int logo_var = 4;
     switch (logo_var)
     {
@@ -672,9 +752,9 @@ void drawTitleWithOffset(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, i
         char line1_1[] = "░█▀█░█▀▀░▀█▀░█░█░█▀█░█▀▄░█░█░░░█▀█░█░█░█▀█░█░░░█▀▀";
         char line1_2[] = "░█░█░█▀▀░░█░░█▄█░█░█░█▀▄░█▀▄░░░█▀█░█▄█░█▀█░█░░░█▀▀";
         char line1_3[] = "░▀░▀░▀▀▀░░▀░░▀░▀░▀▀▀░▀░▀░▀░▀░░░▀░▀░▀░▀░▀░▀░▀▀▀░▀▀▀";
-        drawTextWithOffset(gcbuf, line1_1, pos, -1+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line1_2, pos, 0+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line1_3, pos, 1+offset_row, 0+offset_col);
+        drawText(gcbuf, pos, -1+offset_row, 0+offset_col, line1_1);
+        drawText(gcbuf, pos, 0+offset_row, 0+offset_col, line1_2);
+        drawText(gcbuf, pos, 1+offset_row, 0+offset_col, line1_3);
         break;
     case 2:
         char line2_1[] = " _______          __                       __        _____                 .__          ";
@@ -683,12 +763,12 @@ void drawTitleWithOffset(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, i
         char line2_4[] = "/    |    \\  ___/|  |  \\     (  <_> )  | \\/    <  /    |    \\     /  / __ \\|  |_\\  ___/ ";
         char line2_5[] = "\\____|__  /\\___  >__|   \\/\\_/ \\____/|__|  |__|_ \\ \\____|__  /\\/\\_/  (____  /____/\\___  >";
         char line2_6[] = "        \\/     \\/                              \\/         \\/             \\/          \\/ ";
-        drawTextWithOffset(gcbuf, line2_1, pos, -2+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line2_2, pos, -1+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line2_3, pos, 0+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line2_4, pos, 1+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line2_5, pos, 2+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line2_6, pos, 3+offset_row, 0+offset_col);
+        drawText(gcbuf, pos, -2+offset_row, 0+offset_col, line2_1);
+        drawText(gcbuf, pos, -1+offset_row, 0+offset_col, line2_2);
+        drawText(gcbuf, pos, 0+offset_row, 0+offset_col, line2_3);
+        drawText(gcbuf, pos, 1+offset_row, 0+offset_col, line2_4);
+        drawText(gcbuf, pos, 2+offset_row, 0+offset_col, line2_5);
+        drawText(gcbuf, pos, 3+offset_row, 0+offset_col, line2_6);
         break;
     case 3:
         char line3_1[] = "███╗   ██╗███████╗████████╗██╗    ██╗ ██████╗ ██████╗ ██╗  ██╗     █████╗ ██╗    ██╗ █████╗ ██╗     ███████╗";
@@ -697,12 +777,12 @@ void drawTitleWithOffset(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, i
         char line3_4[] = "██║╚██╗██║██╔══╝     ██║   ██║███╗██║██║   ██║██╔══██╗██╔═██╗     ██╔══██║██║███╗██║██╔══██║██║     ██╔══╝  ";
         char line3_5[] = "██║ ╚████║███████╗   ██║   ╚███╔███╔╝╚██████╔╝██║  ██║██║  ██╗    ██║  ██║╚███╔███╔╝██║  ██║███████╗███████╗";
         char line3_6[] = "╚═╝  ╚═══╝╚══════╝   ╚═╝    ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝    ╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚══════╝";
-        drawTextWithOffset(gcbuf, line3_1, pos, -2+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line3_2, pos, -1+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line3_3, pos, 0+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line3_4, pos, 1+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line3_5, pos, 2+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line3_6, pos, 3+offset_row, 0+offset_col);
+        drawText(gcbuf, pos, -2+offset_row, 0+offset_col, line3_1);
+        drawText(gcbuf, pos, -1+offset_row, 0+offset_col, line3_2);
+        drawText(gcbuf, pos, 0+offset_row, 0+offset_col, line3_3);
+        drawText(gcbuf, pos, 1+offset_row, 0+offset_col, line3_4);
+        drawText(gcbuf, pos, 2+offset_row, 0+offset_col, line3_5);
+        drawText(gcbuf, pos, 3+offset_row, 0+offset_col, line3_6);
         break;
     case 4:
         char line4_1[] = "███╗   ██╗███████╗████████╗██╗    ██╗ ██████╗ ██████╗ ██╗  ██╗";
@@ -717,24 +797,24 @@ void drawTitleWithOffset(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, i
         char line4_10[]= "           ██╔══██║██║███╗██║██╔══██║██║     ██╔══╝           ";
         char line4_11[]= "           ██║  ██║╚███╔███╔╝██║  ██║███████╗███████╗         ";
         char line4_12[]= "           ╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚══════╝         ";
-        char line4_13[]= "     ──────────────────  2   0   0   0  ──────────────────    ";
-        drawTextWithOffset(gcbuf, line4_1, pos, -6+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line4_2, pos, -5+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line4_3, pos, -4+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line4_4, pos, -3+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line4_5, pos, -2+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line4_6, pos, -1+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line4_7, pos, 0+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line4_8, pos, 1+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line4_9, pos, 2+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line4_10, pos, 3+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line4_11, pos, 4+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line4_12, pos, 5+offset_row, 0+offset_col);
-        drawTextWithOffset(gcbuf, line4_13, pos, 6+offset_row, 0+offset_col);
+        char line4_13[]= "!{F005}     ──────────────────  2   0   0   0  ──────────────────    ";
+        drawText(gcbuf, pos, -6+offset_row, 0+offset_col, line4_1);
+        drawText(gcbuf, pos, -5+offset_row, 0+offset_col, line4_2);
+        drawText(gcbuf, pos, -4+offset_row, 0+offset_col, line4_3);
+        drawText(gcbuf, pos, -3+offset_row, 0+offset_col, line4_4);
+        drawText(gcbuf, pos, -2+offset_row, 0+offset_col, line4_5);
+        drawText(gcbuf, pos, -1+offset_row, 0+offset_col, line4_6);
+        drawText(gcbuf, pos, 0+offset_row, 0+offset_col, line4_7);
+        drawText(gcbuf, pos, 1+offset_row, 0+offset_col, line4_8);
+        drawText(gcbuf, pos, 2+offset_row, 0+offset_col, line4_9);
+        drawText(gcbuf, pos, 3+offset_row, 0+offset_col, line4_10);
+        drawText(gcbuf, pos, 4+offset_row, 0+offset_col, line4_11);
+        drawText(gcbuf, pos, 5+offset_row, 0+offset_col, line4_12);
+        drawText(gcbuf, pos, 6+offset_row, 0+offset_col, line4_13);
         break;
     
     default:
-        drawTextWithOffset(gcbuf, "Network Awalé", pos, offset_row, offset_col);
+        drawText(gcbuf, pos, offset_row, offset_col, "Network Awalé");
         break;
     }
 }
