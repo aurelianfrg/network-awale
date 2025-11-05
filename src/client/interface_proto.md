@@ -8,9 +8,10 @@
 - [x] Taille limite de l'écran / ne pas crash quand trop petit 
 - [-] Fonction optionnellement implémentables
 - [x] caractères non ascii pour le texte
-- [/] Couleurs
-- [ ] Boutons/déplacer curseur
-- [ ] Text input
+- [x] Couleurs
+- [x] Boutons/déplacer curseur
+- [x] Text input
+- [ ] Awalé board
 
 # Spécifications des écrans
 

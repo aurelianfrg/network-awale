@@ -3,7 +3,6 @@
 // ===================================
 // ======== RAW TERMINAL STUFF =======
 // ===================================
-
 volatile sig_atomic_t resize_pending = 0;
 TerminalConfig term_config;
 
@@ -36,6 +35,7 @@ TerminalConfig* initTerminal() {
 
 void closeTerminal() {
     disableRawMode();
+    write(STDOUT_FILENO, "\x1b[?25h\x1b[H\x1b[0m", 13);
 }
 
 void disableRawMode() {
@@ -69,7 +69,8 @@ void enableRawMode() {
 
 int terminalReadKey() {
     int nread;
-    char c;
+    int out;
+    unsigned char c;
     while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
         if (nread == -1) {
             if (errno == EAGAIN) continue;
@@ -87,40 +88,52 @@ int terminalReadKey() {
                 if (read(STDIN_FILENO, &seq[2], 1) != 1) return '\x1b';
                 if (seq[2] == '~') {
                     switch (seq[1]) {
-                        case '1': return HOME_KEY;
-                        case '3': return DEL_KEY;
-                        case '4': return END_KEY;
-                        case '5': return PAGE_UP;
-                        case '6': return PAGE_DOWN;
-                        case '7': return HOME_KEY;
-                        case '8': return END_KEY;
+                        case '1': return KEY_HOME;
+                        case '3': return KEY_DEL;
+                        case '4': return KEY_END;
+                        case '5': return KEY_PAGE_UP;
+                        case '6': return KEY_PAGE_DOWN;
+                        case '7': return KEY_HOME;
+                        case '8': return KEY_END;
                     }
                 }
             } else {
                 switch (seq[1]) {
-                    case 'A': return ARROW_UP;
-                    case 'B': return ARROW_DOWN;
-                    case 'C': return ARROW_RIGHT;
-                    case 'D': return ARROW_LEFT;
-                    case 'H': return HOME_KEY;
-                    case 'F': return END_KEY;
+                    case 'A': return KEY_ARROW_UP;
+                    case 'B': return KEY_ARROW_DOWN;
+                    case 'C': return KEY_ARROW_RIGHT;
+                    case 'D': return KEY_ARROW_LEFT;
+                    case 'H': return KEY_HOME;
+                    case 'F': return KEY_END;
                 }
             }
         } else if (seq[0] == 'O') {
             switch (seq[1]) {
-                case 'H': return HOME_KEY;
-                case 'F': return END_KEY;
+                case 'H': return KEY_HOME;
+                case 'F': return KEY_END;
             }
         }
         return '\x1b';
     } else {
-        return c;
+        if (u_charlen(&c) == 1) {
+            out = c;
+        }
+        else {
+            unsigned char uchar[4];
+            uchar[0] = c;
+            for (int i=1; i<u_charlen(&c); i++) {
+                if (read(STDIN_FILENO, uchar+i, 1) != 1) die("Error reading multi-bytes unicode char");
+            }
+            out = u_bytesToCode(uchar);
+        }
+        
+        return out;
     }
 }
 
 void terminalClearScreen() {
-    write(STDOUT_FILENO, "\x1b[2J", 4); // Clear screen
-    write(STDOUT_FILENO, "\x1b[H", 3); // Move cursor to top-left
+    // Clear formatting, clear screen, move cursor to top-left
+    write(STDOUT_FILENO, "\x1b[0m\x1b[2J\x1b[H", 11);
 }
 
 int getCursorPosition(int *rows, int *cols) {
@@ -161,8 +174,8 @@ int getWindowSize(int *rows, int *cols) {
 TuiState app_state;
 
 void initApplication() {
-    app_state.cursorx = 0;
-    app_state.cursory = 0;
+    app_state.cursor_x = 0;
+    app_state.cursor_y = 0;
     app_state.term_config = *initTerminal();
     // Set signal handling
     struct sigaction sa;
@@ -177,63 +190,57 @@ void initApplication() {
 
 // ========= INPUT ==========
 
-void processKeypress() {
-    int c = terminalReadKey();
-    printf("c=%d\r\n", c);
+void processKeypress(int c) {
     switch (c) {
-        case CTRL_KEY('q'):
-            terminalClearScreen();
-            exit(0);
-            break;
-        case ARROW_UP:
-        case ARROW_LEFT:
-        case ARROW_DOWN:
-        case ARROW_RIGHT:
+        case KEY_ARROW_UP:
+        case KEY_ARROW_LEFT:
+        case KEY_ARROW_DOWN:
+        case KEY_ARROW_RIGHT:
         case 'z':
         case 'q':
         case 's':
         case 'd':
             editorMoveCursor(c);
             break;
-        case PAGE_UP:
-        case PAGE_DOWN:
+        case KEY_PAGE_UP:
+        case KEY_PAGE_DOWN:
             int times = app_state.term_config.screenrows;
             while (times--)
-                editorMoveCursor(c == PAGE_UP ? ARROW_UP : ARROW_DOWN);
+                editorMoveCursor(c == KEY_PAGE_UP ? KEY_ARROW_UP : KEY_ARROW_DOWN);
             break;
-        case HOME_KEY:
-            app_state.cursorx = 0;
+        case KEY_HOME:
+            app_state.cursor_x = 0;
             break;
-        case END_KEY:
-            app_state.cursorx = app_state.term_config.screencols - 1;
+        case KEY_END:
+            app_state.cursor_x = app_state.term_config.screencols - 1;
             break;
     }
 }
 
 void editorMoveCursor(int key) {
   switch (key) {
-    case ARROW_LEFT:
+    case KEY_ARROW_LEFT:
     case 'q':
-        if (app_state.cursorx != 0) {
-            app_state.cursorx--;
+        if (app_state.cursor_x != 0) {
+            app_state.cursor_x--;
         }
         break;
-    case ARROW_RIGHT:
+    case KEY_ARROW_RIGHT:
     case 'd':
-        if (app_state.cursorx != app_state.term_config.screencols - 1) {
-            app_state.cursorx++;
+        if (app_state.cursor_x != app_state.term_config.screencols - 1) {
+            app_state.cursor_x++;
         }
         break;
-    case ARROW_UP:
+    case KEY_ARROW_UP:
     case 'z':
-        if (app_state.cursory != 0) {
-            app_state.cursory--;
+        if (app_state.cursor_y != 0) {
+            app_state.cursor_y--;
         }
         break;
-    case ARROW_DOWN:
+    case KEY_ARROW_DOWN:
     case 's':
-        if (app_state.cursory != app_state.term_config.screenrows - 1) {
-            app_state.cursory++;
+        if (app_state.cursor_y != app_state.term_config.screenrows - 1) {
+            app_state.cursor_y++;
         }
         break;
     }
@@ -242,6 +249,7 @@ void editorMoveCursor(int key) {
 // ========= OUTPUT ==========
 
 void drawFrame() {
+    app_state.cursor_visibility = 1; // Cursor is visible by default, must be explicitly hidden each frame
     // Resize if needed
     if (resize_pending) {
         resize_pending = 0;
@@ -384,7 +392,7 @@ void flushFrame(GridCharBuffer* gcbuf) {
     char BUFFER_END_OVERHEAD_VAL[BUFFER_END_OVERHEAD_COST+1];
     char ROW_OVERHEAD_VAL[ROW_OVERHEAD_COST+1];
     strcpy(BUFFER_START_OVERHEAD_VAL, "\x1b[?25l\x1b[H\x1b[0m"); // Hide cursor and reset its position
-    snprintf(BUFFER_END_OVERHEAD_VAL, BUFFER_END_OVERHEAD_COST, "\x1b[?25h\x1b[%d;%dH", app_state.cursory + 1, app_state.cursorx + 1); // Show cursor and move it
+    snprintf(BUFFER_END_OVERHEAD_VAL, BUFFER_END_OVERHEAD_COST, "\x1b[?25%c\x1b[%d;%dH", (app_state.cursor_visibility)?'h':'l', app_state.cursor_y + 1, app_state.cursor_x + 1); // Show cursor and move it
     BUFFER_END_OVERHEAD_COST = strlen(BUFFER_END_OVERHEAD_VAL);
     strcpy(ROW_OVERHEAD_VAL, "\x1b[K\r\n"); // Clear end of line and goto next line
     int gcbuf_size = 0;
@@ -455,8 +463,16 @@ void flushFrame(GridCharBuffer* gcbuf) {
 }
 
 void setCursorPos(int row, int col) {
-    app_state.cursorx = col;
-    app_state.cursory = row;
+    app_state.cursor_x = col;
+    app_state.cursor_y = row;
+}
+
+void hideCursor() {
+    app_state.cursor_visibility = 0;
+}
+
+void showCursor() {
+    app_state.cursor_visibility = 1;
 }
 
 void setCursorPosRelative(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col) {
@@ -513,7 +529,7 @@ void getDrawPosition(int* offset_row, int* offset_col, ScreenPos pos, GridCharBu
 
 // ========= DRAW ========
 
-void drawBox(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, int width, int height) { 
+void drawBox(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, TextStyle* style, int width, int height) { 
     // width and height are inset size
     int pos_row, pos_col;
     getDrawPosition(&pos_row, &pos_col, pos, gcbuf, width+2, height+2);
@@ -527,23 +543,23 @@ void drawBox(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_co
                 if (col==0) strcpy(box_drawing_char, "┌");
                 else if (col==width+1) strcpy(box_drawing_char, "┐");
                 else strcpy(box_drawing_char, "─");
-                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, NO_STYLE);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, style);
             }
             else if (row==height+1) {
                 if (col==0) strcpy(box_drawing_char, "└");
                 else if (col==width+1) strcpy(box_drawing_char, "┘");
                 else strcpy(box_drawing_char, "─");
-                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, NO_STYLE);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, style);
             }
             else if (col==0 || col==width+1) {
                 strcpy(box_drawing_char, "│");
-                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, NO_STYLE);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, style);
             }
         }
     }
 }
 
-void drawStrongBox(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, int width, int height) { 
+void drawStrongBox(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, TextStyle* style, int width, int height) { 
     // width and height are inset size
     int pos_row, pos_col;
     getDrawPosition(&pos_row, &pos_col, pos, gcbuf, width+2, height+2);
@@ -557,23 +573,22 @@ void drawStrongBox(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int off
                 if (col==0) strcpy(box_drawing_char, "╔");
                 else if (col==width+1) strcpy(box_drawing_char, "╗");
                 else strcpy(box_drawing_char, "═");
-                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, NO_STYLE);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, style);
             }
             else if (row==height+1) {
                 if (col==0) strcpy(box_drawing_char, "╚");
                 else if (col==width+1) strcpy(box_drawing_char, "╝");
                 else strcpy(box_drawing_char, "═");
-                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, NO_STYLE);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, style);
             }
             else if (col==0 || col==width+1) {
                 strcpy(box_drawing_char, "║");
-                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, NO_STYLE);
+                putGcbuf(gcbuf, pos_row+row, pos_col+col, box_drawing_char, 3, style);
             }
         }
     }
 }
 
-// strlen for unicode strings
 size_t u_strlen(char *s)
 {
     size_t len = 0;
@@ -581,7 +596,6 @@ size_t u_strlen(char *s)
     return len;
 }
 
-// length for one unicode char
 size_t u_charlen(char *s)
 {
     if (!s) return 0;
@@ -596,7 +610,95 @@ size_t u_charlen(char *s)
     else if ((c >> 3) == 0x1E) // 11110xxx → 4 octets
         return (size_t)4;
     else
-        return (size_t)1;  // caractère invalide ou continuation → on renvoie 1 par défaut
+        return (size_t)0;  // caractère invalide ou continuation → on renvoie 0 par défaut
+}
+
+int isAlpha(int c) {
+    return (c>=97 && c<=122) || (c>=65 && c<=90);
+}
+
+int isNumeric(int c) {
+    return c>=48 && c<=57;
+}
+
+int isAlphaNumeric(int c) {
+    return isAlpha(c) || isNumeric(c);
+}
+
+int isAnyValidChar(int c) {
+    // A subset of accepted unicode values for string (prevents to print unprintables chars)
+    return (c>=32 && c<=126) || (c>=128 && c<=255 && c!=129 && c!=141 && c!=143 && c!=144 && c!=157);; 
+}
+
+int isAnyAsciiChar(int c) {
+    return (c>=32 && c<=126);
+}
+
+int u_strAppend(u_string* s, int codepoint) {
+    char uchar[4];
+    s->char_len++;
+    int uchar_len = u_codeToBytes(codepoint, uchar);
+    for (int i=0; i<uchar_len; i++) {
+        s->buf[s->byte_len] = uchar[i];
+        s->byte_len++;
+    }
+    s->buf[s->byte_len] = '\0';
+    return uchar_len;
+}
+
+int u_strPop(u_string* s) {
+    if (s->byte_len > 0) {
+        do {
+            s->byte_len--;
+        } while (s->byte_len>0 && !u_charlen(&s->buf[s->byte_len]));
+        s->buf[s->byte_len] = '\0';
+        s->char_len--;
+    }
+}
+
+int u_codeToBytes(unsigned int c, unsigned char* out) {
+    // Returns the size of the char out
+    if (c < 128) { // 2^8
+        out[0] = c;
+        return 1;
+    }
+    else if (c < 2048) {
+        out[0] = (((c&0xFFFC0)>>6)+0xC0); // Mask the 6 first bits, should get 5 bits
+        out[1] = ((c&0x3F)+0x80); // Get the last 6 bits
+        return 2;
+    } else if (c < 65536) {
+        out[0] = (((c&0xFFE000)>>12)+0xE0); // Mask the 12 first bits, should get 4 bits
+        out[1] = (((c&0x0FC0)>>6)+0x80); // Mask the 6 first bits, should get the 6 middle bits
+        out[2] = ((c&0x3F)+0x80); // Last 6 bits
+        return 3;
+    } else if (c < 2097152) {
+        out[0] = (((c&0xFC0000)>>18)+0xF0); // Mask the 18 first bits, should get 3 bits
+        out[1] = (((c&0x3F000)>>12)+0x80); // Mask the 12 first bits, should get the 6 middle bits
+        out[2] = (((c&0x0FC0)>>6)+0x80); // Mask the 6 first bits, should get the 6 middle bits
+        out[3] = ((c&0x3F)+0x80); // Last 6 bits
+        return 4;
+    }
+}
+
+int u_bytesToCode(unsigned char* char_in) {
+    // Returns the unicode codepoint
+    int u_len = (int)u_charlen(char_in);
+    char buf[300];
+    if (u_len == 1) return *char_in;
+
+    int first_byte_prefix;
+    int continuation_byte_prefix = 0x80;
+    int codepoint = 0;
+    if (u_len == 2) first_byte_prefix = 0xC0;
+    if (u_len == 3) first_byte_prefix = 0xE0;
+    if (u_len == 4) first_byte_prefix = 0xF0;
+
+    codepoint += (char_in[0]-first_byte_prefix) * (1 << (6*(u_len-1)));
+    sprintf(buf, "codepoint: %d, 1 << 6*(u_len-1): %d, char_in[0]: %d\r\n", codepoint, 1 << (6*(u_len-1)), char_in[0]);
+    for (int i=1; i<u_len; i++)
+        codepoint += (char_in[i]-continuation_byte_prefix) * (1 << (6*((u_len-i)-1)));
+    
+    return codepoint;
 }
 
 void drawText(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, const char* text) {
@@ -703,6 +805,30 @@ void drawText(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_c
     }
 }
 
+void drawTextWithRawStyle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, const char* text, TextStyle* style) {
+    int pos_row, pos_col;
+    getDrawPosition(&pos_row, &pos_col, pos, gcbuf, u_strlen(text), 0);
+    pos_row += offset_row;
+    pos_col += offset_col;
+    int row = 0;
+    int i=0;
+    while (text[i]!='\0') {
+        int char_size = u_charlen(&text[i]);
+        putGcbuf(gcbuf, pos_row, pos_col+row, &text[i], char_size, style);
+        i+=char_size;
+        row++;
+    }
+}
+
+void drawButton(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, const char* text, unsigned char color_code, int selected) {
+    size_t text_length = u_strlen(text);
+    char buf[text_length+13];
+    if (selected) sprintf(buf, "!{iB%03d}[<%s>]", color_code, text);
+    else sprintf(buf, "!{iF%03d}[<%s>]", color_code, text);
+    
+    drawText(gcbuf, pos, offset_row, offset_col, buf);
+}
+
 void drawDebugColors(GridCharBuffer* gcbuf) {
     int COLOR_MAX = 256;
     int COL_WIDTH = 15;
@@ -735,11 +861,10 @@ void drawDebugColors(GridCharBuffer* gcbuf) {
     }
 }
 
-void drawSolidRect(GridCharBuffer* gcbuf, int start_row, int start_col, int end_row, int end_col, char color_code) {
+void drawSolidRect(GridCharBuffer* gcbuf, int start_row, int start_col, int end_row, int end_col, TextStyle* style) {
     for (int row=start_row; row < end_row; row++) {
         for (int col=start_col; col < end_col; col++) {
-            TextStyle style = {mkStyleFlags(2, FG_COLOR, BG_COLOR), color_code, color_code};
-            putGcbuf(gcbuf, row, col, " ", 1, &style);
+            putGcbuf(gcbuf, row, col, " ", 1, style);
         }
     }
 }
@@ -818,3 +943,37 @@ void drawTitle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_
         break;
     }
 }
+
+
+/*
+dots for awalé board
+
+⠄⠆⠇⠏⠟⠿
+aaaaaaaaa 
+⋅ ⁚ ⸫ ⸬ ⸭
+aaaaaaaaa
+iiiiiiiii
+
+┌─────7─┐ ┌─────7─┐ ┌─────7─┐ ┌─────7─┐ ┌─────7─┐ ┌────28─┐ 
+│· · · ·│ │· · · ·│ │∵ ∵ ∵ ∵│ │∴∵∴∵∴∵∴│ │∷∷∷∷∷∷∷│ │:::::::│ 
+│ · · · │ │ · · · │ │ ∴ ∴ ∴ │ │∵∴∵∴∵∴∵│ │∷∷∷∷ ∷∷│ │:::::::│ 
+└───────┘ └───────┘ └───────┘ └───────┘ └───────┘ └───────┘ 
+═══════════════════════════════════════════════════════════
+┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐ 
+│   ·   │ │    ·  │ │   ·   │ │  · ·  │ │· · · ·│ │·······│ 
+│  · ·  │ │  ·    │ │       │ │  · ·  │ │ · · · │ │ ····· │ 
+└─────3─┘ └─────2─┘ └─────1─┘ └─────4─┘ └─────7─┘ └────12─┘ 
+
+::::
+∴∴∴∴∵∵∵∵
+∷∷∷∷
+....
+····
+
+.....
+aaaaa
+⢀⢠⢰⢸⢹⢻⢿⣿⢀⢠⢰⢸⢹⢻⢿⣿
+aaaaaaaaaaaaaaaaaa
+⡀⣀⣄⣆⣇⣧⣷⣿
+
+*/

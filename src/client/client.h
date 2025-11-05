@@ -13,6 +13,7 @@
 
 #include "tui.h"
 #include "../common/communication.h"
+#include "../common/game.h"
 
 #define BUF_SIZE 4096
 
@@ -28,3 +29,6 @@ typedef enum NavigationState {
 
 void connect_to_server(const char* server_ip, int port, int* sock_out, struct sockaddr_in* srv_out);
 void processEvents(struct pollfd pfds[2]);
+void changeMenu(NavigationState new_menu);
+void drawAwaleBoard(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col); 
+void drawAwaleBoard(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col); 

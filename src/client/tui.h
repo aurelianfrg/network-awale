@@ -18,17 +18,19 @@
 // ======== RAW TERMINAL STUFF =======
 // ===================================
 
-typedef enum TerminalKey {
-    ARROW_LEFT = 1000,
-    ARROW_RIGHT,
-    ARROW_UP,
-    ARROW_DOWN,
-    DEL_KEY,
-    PAGE_UP,
-    PAGE_DOWN,
-    HOME_KEY,
-    END_KEY,
-} TerminalKey;
+typedef enum TerminalKeyCode {
+    KEY_BACKSPACE = 127,
+    KEY_ENTER = 13,
+    KEY_ARROW_LEFT = 1000000,
+    KEY_ARROW_RIGHT,
+    KEY_ARROW_UP,
+    KEY_ARROW_DOWN,
+    KEY_DEL,
+    KEY_PAGE_UP,
+    KEY_PAGE_DOWN,
+    KEY_HOME,
+    KEY_END,
+} TerminalKeyCode;
 
 typedef struct TerminalConfig {
     int screenrows;
@@ -62,8 +64,9 @@ int getWindowSize(int* rows, int* cols);
 // ===================================
 
 typedef struct TuiState {
-    int cursorx;
-    int cursory;
+    int cursor_x;
+    int cursor_y;
+    int cursor_visibility;
     TerminalConfig term_config;
 } TuiState;
 
@@ -109,6 +112,14 @@ typedef enum ScreenPos {
     BOTTOM_RIGHT
 } ScreenPos;
 
+typedef struct u_string {
+    char* buf;
+    int byte_len;
+    int char_len;
+} u_string;
+
+const extern TextStyle* NO_STYLE;
+
 void initApplication();
 
 // GRIDCHARBUFFER
@@ -125,24 +136,40 @@ int getCellCharSize(CellChar* cell_char);
 int getGcbufSize(GridCharBuffer* gcbuf);
 
 // INPUT
-void processKeypress();
+void processKeypress(int key);
 void editorMoveCursor(int key);
 
 // OUTPUT
 void setCursorPos(int row, int col);
 void setCursorPosRelative(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col);
+void hideCursor();
+void showCursor();
 void terminalClearScreen();
 void drawFrame();
 void drawFrameDebug();
 void frameContent(GridCharBuffer* gcbuf);
 void getDrawPosition(int* offset_row, int* offset_col, ScreenPos pos, GridCharBuffer* gcbuf, int width, int height);
 
+// strlen for unicode strings
 size_t u_strlen(char *s);
+// length for one unicode char
 size_t u_charlen(char *s);
+int isAlpha(int c);
+int isNumeric(int c);
+int isAlphaNumeric(int c);
+int isAnyAsciiChar(int c);
+int isAnyValidChar(int c);
+int u_codeToBytes(unsigned int c, unsigned char* out);
+int u_bytesToCode(unsigned char* in);
+int u_strAppend(u_string* s, int codepoint);
+int u_strPop(u_string* s);
+
 // DRAW
 void drawDebugColors(GridCharBuffer* gcbuf);
-void drawSolidRect(GridCharBuffer* gcbuf, int start_row, int start_col, int end_row, int end_col, char color_code);
-void drawBox(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, int width, int height); 
-void drawStrongBox(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, int width, int height); 
+void drawSolidRect(GridCharBuffer* gcbuf, int start_row, int start_col, int end_row, int end_col, TextStyle* style);
+void drawBox(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, TextStyle* style, int width, int height); 
+void drawStrongBox(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, TextStyle* style, int width, int height); 
 void drawText(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, const char* text); 
+void drawTextWithRawStyle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, const char* text, TextStyle* style); 
+void drawButton(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, const char* text, unsigned char color_code, int selected); 
 void drawTitle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col); 
