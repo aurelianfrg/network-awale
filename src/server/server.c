@@ -186,32 +186,33 @@ int main(int argc, char **argv) {
                     continue;
                 } else {
 
-                     printf("Message length : %lu\n",r);
+                    // standard case : process how you handle the client when a message was received
+                     printf("\nMessage length : %lu\n",r);
                      int message_type;
                      message_type = *(int*)buf;
 
-                     MessageUserCreation mes;
+                     MessageUserCreation userCreationMes;
                      if (message_type == USER_CREATION) {
-                        mes = * (MessageUserCreation*) (buf+sizeof(int));
-                        printf("message type : %d\n\n", message_type);
-                        printf("username : %s\n", mes.username);
+                        userCreationMes = * (MessageUserCreation*) (buf+sizeof(int));
+                        printf("message type : %d\n", message_type);
+                        printf("username : %s\n", userCreationMes.username);
                      }
 
                      
                      
                     // standard case : process how you handle the client
-                    ssize_t sent = 0;
-                    while (sent < r) {
-                        ssize_t s = send(fd, buf + sent, r - sent, 0);
-                        if (s < 0) {
-                            if (errno == EAGAIN || errno == EWOULDBLOCK) continue;
-                            perror("send");
-                            break;
-                        }
-                        sent += s;
-                    }
-                    // For visibility, print what we got (trim newline)
-                    printf("fd=%d: %.*s\n", fd, (int)r, (int)r ? buf : "(empty)");
+                    // ssize_t sent = 0;
+                    // while (sent < r) {
+                    //     ssize_t s = send(fd, buf + sent, r - sent, 0);
+                    //     if (s < 0) {
+                    //         if (errno == EAGAIN || errno == EWOULDBLOCK) continue;
+                    //         perror("send");
+                    //         break;
+                    //     }
+                    //     sent += s;
+                    // }
+                    // // For visibility, print what we got (trim newline)
+                    // printf("fd=%d: %.*s\n", fd, (int)r, (int)r ? buf : "(empty)");
                 }
             }
         }
