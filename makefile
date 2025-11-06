@@ -27,41 +27,37 @@ RMFLAGS = -f
 # ===============================================
 
 # Compilation des exécutables finaux
-$(CLIENT): $(OBJ_PATH)/$(CLIENT).o  $(OBJ_PATH)/communication.o $(OBJ_PATH)/game.o # + additionnal obj files
+$(CLIENT): $(OBJ_PATH)/$(CLIENT_DIR)/$(CLIENT).o  $(OBJ_PATH)/$(COMMON_DIR)/communication.o $(OBJ_PATH)/$(COMMON_DIR)/game.o # + additionnal obj files
 	@mkdir -p $(BIN_PATH)
 	$(GCC) -o $(BIN_PATH)/$@ $^ $(LIBS)
 
-$(SERVER): $(OBJ_PATH)/$(SERVER).o  $(OBJ_PATH)/communication.o $(OBJ_PATH)/game.o # + additionnal obj files
+$(SERVER): $(OBJ_PATH)/$(SERVER_DIR)/$(SERVER).o  $(OBJ_PATH)/$(COMMON_DIR)/communication.o $(OBJ_PATH)/$(COMMON_DIR)/game.o # + additionnal obj files
 	@mkdir -p $(BIN_PATH)
 	$(GCC) -o $(BIN_PATH)/$@ $^ $(LIBS)
 
-test_game: $(OBJ_PATH)/test_game.o $(OBJ_PATH)/game.o
+test_game: $(OBJ_PATH)/$(TEST_DIR)/test_game.o $(OBJ_PATH)/$(COMMON_DIR)/game.o
 	$(GCC) -o $(BIN_PATH)/$@ $^ $(LIBS)
 
 
 # Compilation des fichiers objets client
-$(OBJ_PATH)/$(CLIENT).o: 
-	@mkdir -p $(OBJ_PATH)
-	$(GCC) $(CCFLAGS) -c $(SRC_PATH)/$(CLIENT_DIR)/$(CLIENT).c -o $@
+$(OBJ_PATH)/$(CLIENT_DIR)/%.o: $(SRC_PATH)/$(CLIENT_DIR)/%.c
+	@mkdir -p $(OBJ_PATH)/$(CLIENT_DIR)
+	$(GCC) $(CCFLAGS) -c $^ -o $@
 
 # Compilation des fichiers objets server
-$(OBJ_PATH)/$(SERVER).o: 
-	@mkdir -p $(OBJ_PATH)
-	$(GCC) $(CCFLAGS) -c $(SRC_PATH)/$(SERVER_DIR)/$(SERVER).c -o $@
+$(OBJ_PATH)/$(SERVER_DIR)/%.o: $(SRC_PATH)/$(SERVER_DIR)/%.c
+	@mkdir -p $(OBJ_PATH)/$(SERVER_DIR)
+	$(GCC) $(CCFLAGS) -c $^ -o $@
 
 # Compilation des fichiers objets common
-$(OBJ_PATH)/communication.o: 
-	@mkdir -p $(OBJ_PATH)
-	$(GCC) $(CCFLAGS) -c $(SRC_PATH)/$(COMMON_DIR)/communication.c -o $@
-
-$(OBJ_PATH)/game.o: 
-	@mkdir -p $(OBJ_PATH)
-	$(GCC) $(CCFLAGS) -c $(SRC_PATH)/$(COMMON_DIR)/game.c -o $@
+$(OBJ_PATH)/$(COMMON_DIR)/%.o: $(SRC_PATH)/$(COMMON_DIR)/%.c
+	@mkdir -p $(OBJ_PATH)/$(COMMON_DIR)
+	$(GCC) $(CCFLAGS) -c $^ -o $@
 
 #compilation des tests
-$(OBJ_PATH)/test_game.o: 
-	@mkdir -p $(OBJ_PATH)
-	$(GCC) $(CCFLAGS) -c $(SRC_PATH)/$(TEST_DIR)/test_game.c -o $@
+$(OBJ_PATH)/$(TEST_DIR)/%.o: $(SRC_PATH)/$(TEST_DIR)/%.c
+	@mkdir -p $(OBJ_PATH)/$(TEST_DIR)
+	$(GCC) $(CCFLAGS) -c $^ -o $@
 
 # ================= Clean =================
 $(CLEAN):

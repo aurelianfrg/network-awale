@@ -17,5 +17,9 @@ int main() {
     printf("valid move ? %d\n", valid_move);
     simpleGamePrinting(game);
 
+    valid_move = playMove(game, BOTTOM, 2);
+    printf("valid move ? %d\n", valid_move);
+    simpleGamePrinting(game);
+
     return 0;
 }
