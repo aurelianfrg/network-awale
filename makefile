@@ -19,7 +19,7 @@ TEST_DIR = tests
 # ================= Options du clean =================
 CLEAN = clean
 RM = rm
-RMFLAGS = -f
+RMFLAGS = -rf
 .PHONY: $(CLEAN)
 
 # ===============================================
@@ -38,19 +38,14 @@ $(SERVER): $(OBJ_PATH)/$(SERVER_DIR)/$(SERVER).o  $(OBJ_PATH)/$(COMMON_DIR)/comm
 test_game: $(OBJ_PATH)/$(TEST_DIR)/test_game.o $(OBJ_PATH)/$(COMMON_DIR)/game.o
 	$(GCC) -o $(BIN_PATH)/$@ $^ $(LIBS)
 
+test_server: $(OBJ_PATH)/$(TEST_DIR)/test_server.o $(OBJ_PATH)/$(COMMON_DIR)/communication.o 
+	$(GCC) -o $(BIN_PATH)/$@ $^ $(LIBS)
+
 
 # Compilation des fichiers objets client
 $(OBJ_PATH)/$(CLIENT_DIR)/%.o: $(SRC_PATH)/$(CLIENT_DIR)/%.c
 	@mkdir -p $(OBJ_PATH)/$(CLIENT_DIR)
 	$(GCC) $(CCFLAGS) -c $^ -o $@
-
-$(OBJ_PATH)/terminal.o: 
-	@mkdir -p $(OBJ_PATH)
-	$(GCC) $(CCFLAGS) -c $(SRC_PATH)/$(CLIENT_DIR)/terminal.c -o $@
-
-$(OBJ_PATH)/tui.o: 
-	@mkdir -p $(OBJ_PATH)
-	$(GCC) $(CCFLAGS) -c $(SRC_PATH)/$(CLIENT_DIR)/tui.c -o $@
 
 # Compilation des fichiers objets server
 $(OBJ_PATH)/$(SERVER_DIR)/%.o: $(SRC_PATH)/$(SERVER_DIR)/%.c
@@ -69,6 +64,6 @@ $(OBJ_PATH)/$(TEST_DIR)/%.o: $(SRC_PATH)/$(TEST_DIR)/%.c
 
 # ================= Clean =================
 $(CLEAN):
-	$(RM) $(RMFLAGS) $(OBJ_PATH)/*.o $(BIN_PATH)/*
+	$(RM) $(RMFLAGS) $(OBJ_PATH)/* $(BIN_PATH)/*
 
 	
