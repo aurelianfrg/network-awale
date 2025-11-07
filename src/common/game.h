@@ -3,7 +3,7 @@
 
 // constants 
 
-#define USERNAME_LENGTH 50
+#define USERNAME_LENGTH 100 // or 25 4-bytes UTF-8 chars
 #define true 1
 #define false 0
 #define bool char
