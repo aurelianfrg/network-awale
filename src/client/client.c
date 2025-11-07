@@ -1,73 +1,46 @@
-/* client.c
- *
- * Simple interactive TCP client.
- *
- * Build: gcc -o client client.c
- * Run:   ./client 127.0.0.1 12345
- *
- * Type lines and press Enter to send. Ctrl-D (EOF) to exit.
- */
+#include "client.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <unistd.h>
+NavigationState navigationState = USER_CREATION_MENU;
 
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+// NETWORKING
+int sock;
+struct sockaddr_in srv;
 
-#include <poll.h>
+// DISPLAY
+#define GENERAL_DISPLAY_BUF_MAX_LENGTH 512
+char general_display_buf[GENERAL_DISPLAY_BUF_MAX_LENGTH];
 
-#include "../common/communication.h"
+// GAME
+char user_pseudo_buf[USERNAME_LENGTH];
+u_string user_pseudo = { user_pseudo_buf, 0, 0 };
 
-#define BUF_SIZE 4096
+User user;
+Player player1;
+Player player2;
+
+Board current_board;
+
+// BUTTONS
+int selected_field = 0;
+int field_count = 1;
+#define PLAY_BUTTON 0
+#define BACK_BUTTON 1
+#define QUIT_BUTTON 2
+
+int selected_awale_house = 0;
+
+//char server_mes[100] = "Waiting for server message...\0";
+
+int display_color_test=0;
 
 int main(int argc, char **argv) {
-    if (argc != 3) {
-        fprintf(stderr, "Usage: %s <server-ip> <port>\n", argv[0]);
-        return EXIT_FAILURE;
-    }
+    if (argc != 3) dieNoError("Usage: COMMAND <server-ip> <port>");
 
-    const char *server_ip = argv[1];
     int port = atoi(argv[2]);
-    if (port <= 0 || port > 65535) {
-        fprintf(stderr, "Invalid port: %s\n", argv[2]);
-        return EXIT_FAILURE;
-    }
+    const char *server_ip = argv[1];
+    connect_to_server(server_ip, port, &sock, &srv);
 
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) { perror("socket"); return EXIT_FAILURE; }
-
-    struct sockaddr_in srv;
-    memset(&srv, 0, sizeof(srv));
-    srv.sin_family = AF_INET;
-    srv.sin_port = htons((unsigned short)port);
-    if (inet_pton(AF_INET, server_ip, &srv.sin_addr) != 1) {
-        fprintf(stderr, "inet_pton failed for %s\n", server_ip);
-        close(sock);
-        return EXIT_FAILURE;
-    }
-
-    if (connect(sock, (struct sockaddr *)&srv, sizeof(srv)) < 0) {
-        perror("connect");
-        close(sock);
-        return EXIT_FAILURE;
-    }
-
-    printf("Connected to %s:%d. Type messages and press Enter.\n", server_ip, port);
-
-
-    // begin initial messages 
-    MessageUserCreation mes;
-    strcpy(mes.username,"xXAurelXx");
-    sendMessageUserCreation(sock, mes);
-
-
-
-
+    initApplication();
 
     struct pollfd pfds[2];
     pfds[0].fd = STDIN_FILENO;
@@ -75,62 +48,258 @@ int main(int argc, char **argv) {
     pfds[1].fd = sock;
     pfds[1].events = POLLIN;
 
-    char buf[BUF_SIZE];
-
     while (1) {
-        int ready = poll(pfds, 2, -1);
-        if (ready < 0) {
-            if (errno == EINTR) continue;
-            perror("poll");
+        drawFrame();
+        processEvents(pfds);
+    }
+
+    close(sock);
+    return EXIT_SUCCESS;
+}
+
+void frameContent(GridCharBuffer* gcbuf) {
+    char conn_infos[50];
+    snprintf(conn_infos, 50, "Connecté à !{ub}%s:%d", inet_ntoa(srv.sin_addr), srv.sin_port);
+    drawText(gcbuf, BOTTOM_RIGHT, -1, 0, conn_infos);
+    drawText(gcbuf, BOTTOM_LEFT, -1, 0, "!{ub}Ctrl-C!{r} pour quitter");
+    //drawText(gcbuf, BOTTOM_CENTER, -1, 0, server_mes);
+
+    switch (navigationState)
+    {
+    case USER_CREATION_MENU:
+        drawTitle(gcbuf, CENTER, -5, 0);
+        drawText(gcbuf,CENTER, 5, 0, "Bienvenue");
+        drawText(gcbuf,CENTER, 7, 0, "Votre pseudonyme !{if}(<ENTRÉE> pour valider)!{r}:");
+        drawBox(gcbuf, CENTER, 9, 0, NO_STYLE, USERNAME_LENGTH/4+2, 1);
+        drawText(gcbuf,CENTER, 9, 0, user_pseudo.buf);
+        setCursorPosRelative(gcbuf, CENTER, 9, (user_pseudo.char_len+1)/2);
+        break;
+
+    case MAIN_MENU:
+        hideCursor();
+        drawTitle(gcbuf, TOP_CENTER, 8, 0);
+        drawButton(gcbuf, CENTER, 0, 0, "Jouer", 2, selected_field==PLAY_BUTTON);
+        drawButton(gcbuf, CENTER, 8, 0, "Retour", 13, selected_field==BACK_BUTTON);
+        drawButton(gcbuf, CENTER, 10, 0, "Quitter", 17, selected_field==QUIT_BUTTON);
+        sprintf(general_display_buf, "Pseudo: !{bi}%s!{r}", user_pseudo.buf);
+        drawText(gcbuf, BOTTOM_CENTER, -2, 0, general_display_buf);
+        break;
+
+    case IN_GAME_MENU:
+        hideCursor();
+        drawTitle(gcbuf, TOP_CENTER, 8, 0);
+        drawAwaleBoard(gcbuf, CENTER, 0, 0);
+        break;
+    
+    default:
+        break;
+    }
+
+    if (display_color_test) {
+        drawSolidRect(gcbuf, 0, 0, gcbuf->rows, gcbuf->cols, NO_STYLE);
+        drawDebugColors(gcbuf);
+        setCursorPosRelative(gcbuf, BOTTOM_RIGHT, 0, 0);
+    }
+}
+
+void changeMenu(NavigationState new_menu) {
+    switch (navigationState) {
+    case USER_CREATION_MENU:
+        // begin initial messages 
+        MessageUserCreation mes;
+        strcpy(mes.username,"xXAnatouXx");
+        sendMessageUserCreation(sock, mes);
+        break;
+    }
+    navigationState = new_menu;
+    switch (new_menu) {
+    case USER_CREATION_MENU:
+        user_pseudo.buf[0] = '\0';
+        user_pseudo.byte_len = 0;
+        user_pseudo.char_len = 0;
+        break;
+
+    case MAIN_MENU:
+        selected_field = 0;
+        field_count = 3;
+        break;
+
+    default:
+        break;
+    }
+}
+
+
+void processEvents(struct pollfd pfds[2]) {
+    // Poll all events from STDIN and SOCK
+    int sock = pfds[1].fd;
+    int ready = poll(pfds, 2, -1);
+    if (ready < 0) {
+        if (errno == EINTR) return;
+        close(sock);
+        die("poll");
+    }
+
+    // stdin
+    if (pfds[0].revents & POLLIN) {
+        int c = terminalReadKey();
+        processKeypress(c);
+        // GENERAL KEYBINDS
+        switch (c) {
+        case CTRL_KEY('c'):
+            terminalClearScreen();
+            exit(0);
+            break;
+        case CTRL_KEY('t'):
+            display_color_test = ~display_color_test;
             break;
         }
+        // CONTEXTUAL KEYBINDS
+        switch (navigationState) {
+        case USER_CREATION_MENU:
+            // Curly braces are not allowed in pseudo (for display reasons)
+            if (isAnyValidChar(c) && c!=123 && c!=125 && user_pseudo.char_len<USERNAME_LENGTH/4) 
+                u_strAppend(&user_pseudo, c);
+            else if (c==KEY_BACKSPACE) u_strPop(&user_pseudo);
+            else if (c==KEY_ENTER) changeMenu(MAIN_MENU);
+            break;
 
-        // stdin
-        if (pfds[0].revents & POLLIN) {
-            ssize_t r = read(STDIN_FILENO, buf, sizeof(buf));
-            if (r < 0) {
-                perror("read stdin");
-                break;
-            } else if (r == 0) {
-                // EOF from user (Ctrl-D)
-                printf("EOF on stdin, closing.\n");
-                break;
-            } else {
-                // send to server
-                ssize_t sent = 0;
-                while (sent < r) {
-                    ssize_t s = send(sock, buf + sent, r - sent, 0);
-                    if (s < 0) {
-                        perror("send");
-                        goto out;
-                    }
-                    sent += s;
+        case MAIN_MENU:
+            if (c==KEY_ARROW_UP && selected_field>0) selected_field--;
+            else if (c==KEY_ARROW_DOWN && selected_field<field_count-1) selected_field++;
+            else if (c==KEY_ENTER) switch (selected_field)
+                {
+                case PLAY_BUTTON:
+                    changeMenu(IN_GAME_MENU);
+                    break;
+                case BACK_BUTTON:
+                    changeMenu(USER_CREATION_MENU);
+                    break;
+                case QUIT_BUTTON:
+                    terminalClearScreen();
+                    exit(0);
+                    break;
+                
+                default:
+                    die("Selected field is invalid");
+                    break;
                 }
-            }
-        }
-
-        // socket
-        if (pfds[1].revents & POLLIN) {
-            ssize_t r = recv(sock, buf, sizeof(buf)-1, 0);
-            if (r < 0) {
-                perror("recv");
-                break;
-            } else if (r == 0) {
-                printf("Server closed connection.\n");
-                break;
-            } else {
-                buf[r] = '\0';
-                printf("Server: %s", buf); // server may include newline
-            }
-        }
-
-        if (pfds[1].revents & (POLLHUP | POLLERR | POLLNVAL)) {
-            printf("Socket closed or error.\n");
+            break;
+        
+        case IN_GAME_MENU:
+            if (c==KEY_ARROW_LEFT && selected_awale_house>0) selected_awale_house--;
+            else if (c==KEY_ARROW_RIGHT && selected_awale_house<5) selected_awale_house++;
+            break;
+        
+        default:
             break;
         }
     }
 
-out:
-    close(sock);
-    return EXIT_SUCCESS;
+    // socket
+    if (pfds[1].revents & POLLIN) {
+        char buf[BUF_SIZE];
+        ssize_t r = recv(sock, buf, sizeof(buf)-1, 0);
+        if (r < 0) {
+            close(sock);
+            die("recv");
+        } else if (r == 0) {
+            close(sock);
+            die("Server closed connection.\n");
+        } else {
+            buf[r] = '\0';
+            // if (r<100) {
+            //     sprintf(server_mes, "Recieved: %s", buf);
+            // }
+        }
+    }
+
+    if (pfds[1].revents & (POLLHUP | POLLERR | POLLNVAL)) {
+        die("Socket closed or error.");
+    }
+}
+
+void connect_to_server(const char* server_ip, int port, int* sock_out, struct sockaddr_in* srv_out) {
+    if (port <= 0 || port > 65535) {
+        fprintf(stderr, "Invalid port: %d\n", port);
+        die("Invalid port");
+    }
+
+    *sock_out = socket(AF_INET, SOCK_STREAM, 0);
+    if (*sock_out < 0) die("socket"); 
+
+    memset(srv_out, 0, sizeof(*srv_out));
+    srv_out->sin_family = AF_INET;
+    srv_out->sin_port = htons((unsigned short)port);
+    if (inet_pton(AF_INET, server_ip, &(srv_out->sin_addr)) != 1) {
+        fprintf(stderr, "inet_pton failed for %s\n", server_ip);
+        close(*sock_out);
+        die("inet_pton failed");
+    }
+
+    if (connect(*sock_out, (struct sockaddr *)srv_out, sizeof(*srv_out)) < 0) {
+        close(*sock_out);
+        die("connect");
+    }
+    // printf("Connected to %s:%d. Type messages and press Enter.\n", server_ip, port);
+}
+
+#define AWALE_HOUSE_WIDTH 9
+#define AWALE_HOUSE_HEIGHT 4
+
+void drawAwaleHouse(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, TextStyle* style, int seed_count, int side) {
+    int width = AWALE_HOUSE_WIDTH;
+    int height = AWALE_HOUSE_HEIGHT;
+
+    drawBox(gcbuf, TOP_LEFT, offset_row, offset_col, style, width-2, height-2);
+    char buf[20]; sprintf(buf, "%d", seed_count);
+    if (side == TOP)
+        drawTextWithRawStyle(gcbuf, TOP_LEFT, offset_row, offset_col+width-2-strlen(buf), buf, style);
+    else
+        drawTextWithRawStyle(gcbuf, TOP_LEFT, offset_row+height-1, offset_col+width-2-strlen(buf), buf, style);
+
+    int drawn_seeds = 0;
+    drawSolidRect(gcbuf, offset_row+1, offset_col+1, offset_row+height-1, offset_col+width-1, style);
+    for (int i=0; i<width-2 && drawn_seeds<seed_count; i++, drawn_seeds++)
+        drawTextWithRawStyle(gcbuf, TOP_LEFT, offset_row+1, offset_col+1+i, ".", style);
+    for (int i=0; i<width-2 && drawn_seeds<seed_count; i++, drawn_seeds++)
+        drawTextWithRawStyle(gcbuf, TOP_LEFT, offset_row+2, offset_col+1+i, ".", style);
+    for (int i=0; i<width-2 && drawn_seeds<seed_count; i++, drawn_seeds++)
+        drawTextWithRawStyle(gcbuf, TOP_LEFT, offset_row+2, offset_col+1+i, ":", style);
+    for (int i=0; i<width-2 && drawn_seeds<seed_count; i++, drawn_seeds++)
+        drawTextWithRawStyle(gcbuf, TOP_LEFT, offset_row+1, offset_col+1+i, ":", style);
+    for (int i=0; i<width-2 && drawn_seeds<seed_count; i++, drawn_seeds++) 
+        drawTextWithRawStyle(gcbuf, TOP_LEFT, offset_row+2, offset_col+1+i, ((i%2)==0)?"∴":"∵", style);
+    for (int i=0; i<width-2 && drawn_seeds<seed_count; i++, drawn_seeds++)
+        drawTextWithRawStyle(gcbuf, TOP_LEFT, offset_row+1, offset_col+1+i, ((i%2)==0)?"∴":"∵", style);
+    for (int i=0; i<width-2 && drawn_seeds<seed_count; i++, drawn_seeds++)
+        drawTextWithRawStyle(gcbuf, TOP_LEFT, offset_row+2, offset_col+1+i, "∷", style);
+    for (int i=0; i<width-2 && drawn_seeds<seed_count; i++, drawn_seeds++)
+        drawTextWithRawStyle(gcbuf, TOP_LEFT, offset_row+1, offset_col+1+i, "∷", style);
+
+}
+
+void drawAwaleBoard(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col) {
+    int board_width = AWALE_HOUSE_WIDTH*6 + 5;
+    int board_height = AWALE_HOUSE_HEIGHT*2 + 1;
+
+    int pos_row, pos_col;
+    getDrawPosition(&pos_row, &pos_col, pos, gcbuf, board_width, board_height);
+    pos_row += offset_row;
+    pos_col += offset_col;
+
+    TextStyle ennemy_style = { mkStyleFlags(1, FAINT), 0, 0 };
+    TextStyle player_style = { 0, 0, 0 };
+    TextStyle player_style_selected = { player_style.flags | mkStyleFlags(1, INVERSE), player_style.fg_color_code, player_style.bg_color_code };
+    TextStyle center_style = { mkStyleFlags(1, FAINT), 0, 0 };
+    for (int i=0; i<6; i++)
+        drawAwaleHouse(gcbuf, TOP_LEFT, pos_row+offset_row, pos_col+(AWALE_HOUSE_WIDTH+1)*i+offset_col, &ennemy_style, 4, TOP);
+    for (int i=0; i<6; i++) {
+        if (selected_awale_house == i)
+            drawAwaleHouse(gcbuf, TOP_LEFT, pos_row+board_height-AWALE_HOUSE_HEIGHT+offset_row, pos_col+(AWALE_HOUSE_WIDTH+1)*i+offset_col, &player_style_selected, 4, BOTTOM);
+        else
+            drawAwaleHouse(gcbuf, TOP_LEFT, pos_row+board_height-AWALE_HOUSE_HEIGHT+offset_row, pos_col+(AWALE_HOUSE_WIDTH+1)*i+offset_col, &player_style, 4, BOTTOM);
+    }
+    for (int i=0; i<board_width; i++)
+        drawTextWithRawStyle(gcbuf, TOP_LEFT, pos_row+board_height/2+offset_row, pos_col+i, "═", &center_style);
 }

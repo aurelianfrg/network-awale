@@ -1,6 +1,6 @@
+#pragma once
 
-
-#define USERNAME_LENGTH 50
+#define USERNAME_LENGTH 100 // or 25 4-bytes UTF-8 chars
 
 typedef struct House {
     unsigned int seeds;
