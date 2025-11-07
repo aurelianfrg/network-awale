@@ -57,6 +57,11 @@ int main(int argc, char **argv) {
 
     // TESTS
 
+    // user creation
+    MessageUserCreation user_creation_msg;
+    strcpy(user_creation_msg.username, "Aurelll");
+    sendMessageUserCreation(sock, user_creation_msg);
+
 
     return 0;
 }

@@ -8,27 +8,17 @@
  * Author: example
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <unistd.h>
-#include <signal.h>
-
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-
-#include <poll.h>
-#include <fcntl.h>
-
-#include "../common/communication.h"
+#include "server.h"
 
 #define BACKLOG 16
 #define MAX_CLIENTS 1024
 #define BUF_SIZE 4096
 
+// GAME LOGIC
+User* users[MAX_CLIENTS];
+
+
+// CONNECTION LOGIC
 static volatile sig_atomic_t keep_running = 1;
 
 void int_handler(int _) { (void)_; keep_running = 0; }
@@ -186,17 +176,23 @@ int main(int argc, char **argv) {
                     continue;
                 } else {
 
-                    // standard case : process how you handle the client when a message was received
-                     printf("\nMessage length : %lu\n",r);
-                     int message_type;
-                     message_type = *(int*)buf;
+                    // index user using fd, which identifies it and never changes
+                    if (fd >= MAX_CLIENTS) {
+                        printf("error : a file descriptor is higher than the max number of clients");
+                    }
+                    User* current_user = users[fd]; // user from whom we received a message
 
-                     MessageUserCreation userCreationMes;
-                     if (message_type == USER_CREATION) {
+                    // standard case : process how you handle the client when a message was received
+                    printf("\nMessage length : %lu\n",r);
+                    int message_type;
+                    message_type = *(int*)buf;
+
+                    MessageUserCreation userCreationMes;
+                    if (message_type == USER_CREATION) {
                         userCreationMes = * (MessageUserCreation*) (buf+sizeof(int));
                         printf("message type : %d\n", message_type);
                         printf("username : %s\n", userCreationMes.username);
-                     }
+                    }
 
                      
                      
@@ -226,3 +222,5 @@ int main(int argc, char **argv) {
 
     return EXIT_SUCCESS;
 }
+
+//int handle_message(int message_type, User* source_user);

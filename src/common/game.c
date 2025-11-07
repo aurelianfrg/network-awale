@@ -15,15 +15,15 @@ User* createUser(const char name[]) {
     return user;
 }
 
-Game* initGame(User user1, User user2) {
+Game* initGame(User * user1, User * user2) {
 
     Game* game = (Game*) malloc(sizeof(Game));
 
     // create players
-    game->players[0].user = user1;
-    game->players[0].side = TOP;
-    game->players[1].user = user2;
-    game->players[1].side = BOTTOM;
+    game->players[0] = user1;
+    user1->side = TOP;
+    game->players[1] = user2;
+    user2->side = BOTTOM;
     
     // fill houses with 4 seeds
     for (int i = 0; i < 12; ++i) {
@@ -95,11 +95,11 @@ int playMove(Game* game, Side turn, int selected_house) {
 
 void simpleGamePrinting(Game* game) {
     printf("%s (%d - BOTTOM) vs %s (%d - TOP) : %s to play\n\n", 
-        game->players[0].user.username, 
-        game->players[0].user.id, 
-        game->players[1].user.username, 
-        game->players[1].user.id, 
-        (game->snapshot.turn == BOTTOM ? game->players[BOTTOM].user.username : game->players[TOP].user.username) 
+        game->players[0]->username, 
+        game->players[0]->id, 
+        game->players[1]->username, 
+        game->players[1]->id, 
+        (game->snapshot.turn == BOTTOM ? game->players[BOTTOM]->username : game->players[TOP]->username) 
     );
 
     // print top side

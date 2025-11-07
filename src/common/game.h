@@ -9,6 +9,7 @@
 #define bool char
 
 // data structures 
+typedef struct Game Game;
 
 typedef struct House {
     unsigned int seeds;
@@ -20,14 +21,11 @@ typedef enum Side {
 } Side;
 
 typedef struct User {
-    unsigned int id;
+    int id;
     char username[USERNAME_LENGTH];
-} User;
-
-typedef struct Player {
-    User user;
+    Game* active_game;
     Side side;              // 0 : bottom, 1 : top
-} Player;
+} User;
 
 typedef struct Board {
     House houses[12];
@@ -43,7 +41,7 @@ typedef struct GameSnapshot {
 } GameSnapshot; 
 
 typedef struct Game {
-    Player players[2];      // players[TOP] and players[BOTTOM]
+    User* players[2];      // players[TOP] and players[BOTTOM]
     GameSnapshot snapshot;
 } Game;
 
@@ -53,7 +51,7 @@ typedef struct Game {
 void simpleGamePrinting(Game* game);
 // simply print the state of a game
 
-Game* initGame(User user1, User user2);
+Game* initGame(User* user1, User* user2);
 // init a game between users
 
 User* createUser(const char name[]);
