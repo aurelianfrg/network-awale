@@ -1,11 +1,14 @@
 #pragma once 
 
 #include "game.h"
+#define MAX_CLIENTS 1024
 
 
 enum MessageType {
     USER_CREATION,          // client -> server
     USER_REGISTRATION,      // server -> client
+    GET_USER_LIST,
+    SEND_USER_LIST,
     QUEUE_REQUEST,          // client -> server
     QUEUE_ACKNWOLEDGEMENT,  // server -> client
     GAME_START,             // server -> client
@@ -47,3 +50,12 @@ typedef struct MessageGameMove {
 } MessageGameMove;
 
 void sendMessageUserCreation(int fd, MessageUserCreation message);
+void sendMessageUserRegistration(int fd, MessageUserRegistration message);
+void sendMessageQueueRequest(int fd, MessageQueueRequest message);
+void sendMessageGameStart(int fd, MessageGameStart message);
+void sendMessageGameUpdate(int fd, MessageGameUpdate message);
+void sendMessageGameEnd(int fd, MessageGameEnd message);
+void sendMessageGameMove(int fd, MessageGameMove message);
+
+void sendMessageGetUserList(int fd);
+void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int usernames_count);

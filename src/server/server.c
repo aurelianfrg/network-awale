@@ -10,10 +10,6 @@
 
 #include "server.h"
 
-#define BACKLOG 16
-#define MAX_CLIENTS 1024
-#define BUF_SIZE 4096
-
 // GAME LOGIC
 User* users[MAX_CLIENTS];
 
@@ -136,7 +132,7 @@ int main(int argc, char **argv) {
 
                 char ipbuf[INET_ADDRSTRLEN];
                 inet_ntop(AF_INET, &cli_addr.sin_addr, ipbuf, sizeof(ipbuf));
-                printf("Accepted %s:%d (fd=%d)\n", ipbuf, ntohs(cli_addr.sin_port), client_fd);
+                printf("\nAccepted %s:%d (fd=%d)\n", ipbuf, ntohs(cli_addr.sin_port), client_fd);
             }
         }
 
@@ -153,6 +149,12 @@ int main(int argc, char **argv) {
                 pfds[i] = pfds[nfds - 1];
                 nfds--;
                 i--; // check the moved one on next iteration
+
+                // deallocate user if it exists
+                if (users[fd] != NULL) {
+                    free(users[fd]);
+                    users[fd] = NULL;
+                }
                 continue;
             }
 
@@ -165,6 +167,11 @@ int main(int argc, char **argv) {
                     pfds[i] = pfds[nfds - 1];
                     nfds--;
                     i--;
+                    // deallocate user if it exists
+                    if (users[fd] != NULL) {
+                        free(users[fd]);
+                        users[fd] = NULL;
+                    }
                     continue;
                 } else if (r == 0) {
                     // client closed
@@ -173,6 +180,11 @@ int main(int argc, char **argv) {
                     pfds[i] = pfds[nfds - 1];
                     nfds--;
                     i--;
+                    // deallocate user if it exists
+                    if (users[fd] != NULL) {
+                        free(users[fd]);
+                        users[fd] = NULL;
+                    }
                     continue;
                 } else {
 
@@ -180,35 +192,18 @@ int main(int argc, char **argv) {
                     if (fd >= MAX_CLIENTS) {
                         printf("error : a file descriptor is higher than the max number of clients");
                     }
-                    User* current_user = users[fd]; // user from whom we received a message
-
+                    
                     // standard case : process how you handle the client when a message was received
                     printf("\nMessage length : %lu\n",r);
-                    int message_type;
-                    message_type = *(int*)buf;
+                    int message_type = *(int*)buf;
+                    void* message_ptr = (void*) ((int*)buf+1);
 
-                    MessageUserCreation userCreationMes;
-                    if (message_type == USER_CREATION) {
-                        userCreationMes = * (MessageUserCreation*) (buf+sizeof(int));
-                        printf("message type : %d\n", message_type);
-                        printf("username : %s\n", userCreationMes.username);
+                    // TODO: change this mecanism to handle the case where several message are received at once in the same buffer
+                    int success = handle_message(message_type, message_ptr, users, fd);
+
+                    if (success < 0) {
+                        printf("Something went wrong handling message from user with file descriptor %d\n", fd);
                     }
-
-                     
-                     
-                    // standard case : process how you handle the client
-                    // ssize_t sent = 0;
-                    // while (sent < r) {
-                    //     ssize_t s = send(fd, buf + sent, r - sent, 0);
-                    //     if (s < 0) {
-                    //         if (errno == EAGAIN || errno == EWOULDBLOCK) continue;
-                    //         perror("send");
-                    //         break;
-                    //     }
-                    //     sent += s;
-                    // }
-                    // // For visibility, print what we got (trim newline)
-                    // printf("fd=%d: %.*s\n", fd, (int)r, (int)r ? buf : "(empty)");
                 }
             }
         }
@@ -223,4 +218,62 @@ int main(int argc, char **argv) {
     return EXIT_SUCCESS;
 }
 
-//int handle_message(int message_type, User* source_user);
+int handle_message(int message_type, void* message_ptr, User* users[MAX_CLIENTS], int user_fd) {
+
+    User* source_user = users[user_fd];
+    switch (message_type) {
+
+        case USER_CREATION:
+            if (source_user != NULL){
+                printf("error: User is already registered.\n");
+                return -1;
+            }
+            MessageUserCreation userCreationMes;
+            userCreationMes = * (MessageUserCreation*) message_ptr;
+            printf("User creation message received\n");
+            printf("username : %s\n", userCreationMes.username);
+
+            User* instanciated_user = createUser(userCreationMes.username);
+            // update user 
+            users[user_fd] = instanciated_user;
+
+            //acknowledge client 
+            MessageUserRegistration msg;
+            msg.user_id = user_fd;
+            sendMessageUserRegistration(user_fd, msg);
+
+            break;
+
+        case GET_USER_LIST:
+            if (source_user == NULL) {
+                printf("error: Got a request from an unregistered user.");
+            }
+            printf("Received users list request from %s", users[user_fd]->username);
+            fflush(stdout);
+
+            // list all users 
+            char usernames[MAX_CLIENTS][USERNAME_LENGTH];
+            int users_count = 0;
+            for (int user_id = 0; user_id < MAX_CLIENTS; ++user_id) {
+                if (users[user_id] != NULL && user_id != user_fd) {
+                    strcpy(usernames[users_count++], users[user_id]->username);
+                }
+            }
+
+            // send result to client
+            sendUserList(user_fd, usernames, users_count);
+
+            break;
+
+        case QUEUE_REQUEST:
+            // check that user is indeed created
+            if (source_user == NULL) {
+                printf("error: Got a request from an unregistered user.");
+            }
+
+            break;
+
+    }
+    return 0;
+}
+

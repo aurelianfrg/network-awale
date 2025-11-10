@@ -8,7 +8,7 @@
 User* createUser(const char name[]) {
     static int id_count = 0;
 
-    User* user = (User*) malloc(sizeof(User));
+    User* user = (User*) calloc(1, sizeof(User));
     strcpy(user->username, name);
     user->id = id_count++;
 
@@ -17,7 +17,7 @@ User* createUser(const char name[]) {
 
 Game* initGame(User * user1, User * user2) {
 
-    Game* game = (Game*) malloc(sizeof(Game));
+    Game* game = (Game*) calloc(1, sizeof(Game));
 
     // create players
     game->players[0] = user1;

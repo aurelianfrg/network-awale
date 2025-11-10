@@ -55,6 +55,7 @@ int main(int argc, char **argv) {
     const char *server_ip = argv[1];
     connect_to_server(server_ip, port, &sock, &srv);
 
+
     // TESTS
 
     // user creation
@@ -62,6 +63,45 @@ int main(int argc, char **argv) {
     strcpy(user_creation_msg.username, "Aurelll");
     sendMessageUserCreation(sock, user_creation_msg);
 
+    // get response from server
+    int message_type;
+    recv(sock, &message_type, sizeof(int), 0);
+    if (message_type == USER_REGISTRATION) {
+        MessageUserRegistration msg;
+        recv(sock, &msg, sizeof(msg), 0);
+        printf("Server acknowledged user registration with id %d.\n", msg.user_id);
+    } 
 
+    // second creation that should fail
+    sleep(1);
+    sendMessageUserCreation(sock, user_creation_msg);
+
+    // init a second connection
+    int sock2;
+    struct sockaddr_in srv2;
+    connect_to_server(server_ip, port, &sock2, &srv2);
+
+    // register the second player
+    MessageUserCreation user_creation_msg2;
+    strcpy(user_creation_msg2.username, "Anatouuu");
+    sendMessageUserCreation(sock2, user_creation_msg2);
+
+    // get users list
+    sendMessageGetUserList(sock);
+    // hopefully get server response
+    recv(sock, &message_type, sizeof(int), 0);
+    if (message_type == SEND_USER_LIST) {
+        int usernames_count;
+        recv(sock, &usernames_count, sizeof(int), 0);
+        char buffer[USERNAME_LENGTH];
+        printf("Users : \n");
+        for (int i = 0; i < usernames_count; ++i) {
+            recv(sock, &buffer, sizeof(char)*USERNAME_LENGTH, 0);
+            printf(" - %s\n", buffer);
+        }
+    }
+    
+
+    getchar();
     return 0;
 }

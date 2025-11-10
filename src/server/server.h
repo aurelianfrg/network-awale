@@ -15,5 +15,7 @@
 
 #include "../common/communication.h"
 
+#define BACKLOG 16
+#define BUF_SIZE 4096
 
-int handle_message(int message_type, User* source_user);
+int handle_message(int message_type, void* message_ptr, User* users[MAX_CLIENTS], int user_fd);

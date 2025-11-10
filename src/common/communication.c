@@ -126,6 +126,25 @@ void sendMessageIllegalMove(int fd) {
     send(fd, &ack, sizeof(ack), 0);
 }
 
+void sendMessageGetUserList(int fd) {
+    int message_type = GET_USER_LIST;
+    send(fd, &message_type, sizeof(message_type), 0);
+}
+
+void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int usernames_count) {
+
+    // first send message type
+    int message_type = SEND_USER_LIST;
+    send(fd, &message_type, sizeof(int), 0);
+
+    // then announce how many usernames are sent
+    send(fd, &usernames_count, sizeof(int), 0);
+
+    // then send usernames
+    send(fd, usernames, usernames_count*USERNAME_LENGTH*sizeof(char), 0);
+}
+
+
 // void sendMessageXXX(int fd, MessageXXX message) {
 
 //     typedef struct MessageWithHeader {
