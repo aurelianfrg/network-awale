@@ -11,7 +11,6 @@
 #include "server.h"
 
 // GAME LOGIC
-User* users[MAX_CLIENTS];
 
 
 // CONNECTION LOGIC
@@ -24,6 +23,24 @@ int set_nonblocking(int fd) {
     if (flags < 0) return -1;
     return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
+
+// void disconnect_user(int* user_index, int fd, User* users[MAX_CLIENTS], struct pollfd *pfds, int * nfds) {
+//     printf("Client %d with fd %d disconnected.\n", user_index, fd);
+//     close(fd);
+//     // remove this pfds entry by shifting
+//     pfds[*user_index] = pfds[*nfds - 1];
+//     pfds[*nfds - 1].fd = -1;
+//     pfds[*nfds - 1].events = 0;
+//     pfds[*nfds - 1].revents = 0;
+//     // deallocate user if it exists
+//     if (users[*user_index] != NULL) {
+//         free(users[*user_index]);
+//     }
+//     users[*user_index] = users[*nfds-1];
+//     users[*nfds-1] = NULL;
+//     --(*nfds);
+//     --(*user_index); // check the moved one on next iteration
+// }
 
 int main(int argc, char **argv) {
     if (argc != 2) {
@@ -52,6 +69,9 @@ int main(int argc, char **argv) {
         close(listen_fd);
         return EXIT_FAILURE;
     }
+
+    User* users[MAX_CLIENTS];
+    memset(users, 0, sizeof(User*)*MAX_CLIENTS);
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
@@ -144,17 +164,21 @@ int main(int argc, char **argv) {
 
             if (re & (POLLERR | POLLHUP | POLLNVAL)) {
                 // client disconnected/error
+                printf("Client %d with fd %d disconnected.\n", i, fd);
                 close(fd);
                 // remove this pfds entry by shifting
                 pfds[i] = pfds[nfds - 1];
-                nfds--;
-                i--; // check the moved one on next iteration
-
+                pfds[nfds - 1].fd = -1;
+                pfds[nfds - 1].events = 0;
+                pfds[nfds - 1].revents = 0;
                 // deallocate user if it exists
-                if (users[fd] != NULL) {
-                    free(users[fd]);
-                    users[fd] = NULL;
+                if (users[i] != NULL) {
+                    free(users[i]);
                 }
+                users[i] = users[nfds-1];
+                users[nfds-1] = NULL;
+                nfds--;
+                i--; // check the moved one on next iteration                
                 continue;
             }
 
@@ -164,28 +188,40 @@ int main(int argc, char **argv) {
                     if (errno == EAGAIN || errno == EWOULDBLOCK) continue;
                     perror("recv");
                     close(fd);
+                    // remove this pfds entry by shifting
                     pfds[i] = pfds[nfds - 1];
-                    nfds--;
-                    i--;
+                    pfds[nfds - 1].fd = -1;
+                    pfds[nfds - 1].events = 0;
+                    pfds[nfds - 1].revents = 0;
                     // deallocate user if it exists
-                    if (users[fd] != NULL) {
-                        free(users[fd]);
-                        users[fd] = NULL;
+                    if (users[i] != NULL) {
+                        free(users[i]);
                     }
+                    users[i] = users[nfds-1];
+                    users[nfds-1] = NULL;
+                    nfds--;
+                    i--; // check the moved one on next iteration                
                     continue;
+
                 } else if (r == 0) {
                     // client closed
-                    printf("Client fd=%d closed\n", fd);
+                    printf("Client %d with fd %d disconnected.\n", i, fd);
                     close(fd);
+                    // remove this pfds entry by shifting
                     pfds[i] = pfds[nfds - 1];
-                    nfds--;
-                    i--;
+                    pfds[nfds - 1].fd = -1;
+                    pfds[nfds - 1].events = 0;
+                    pfds[nfds - 1].revents = 0;
                     // deallocate user if it exists
-                    if (users[fd] != NULL) {
-                        free(users[fd]);
-                        users[fd] = NULL;
+                    if (users[i] != NULL) {
+                        free(users[i]);
                     }
+                    users[i] = users[nfds-1];
+                    users[nfds-1] = NULL;
+                    nfds--;
+                    i--; // check the moved one on next iteration                
                     continue;
+
                 } else {
 
                     // index user using fd, which identifies it and never changes
@@ -195,11 +231,12 @@ int main(int argc, char **argv) {
                     
                     // standard case : process how you handle the client when a message was received
                     printf("\nMessage length : %lu\n",r);
-                    int message_type = *(int*)buf;
+                    int message_type;
+                    memcpy(&message_type, buf, sizeof(int));
                     void* message_ptr = (void*) ((int*)buf+1);
 
                     // TODO: change this mecanism to handle the case where several message are received at once in the same buffer
-                    int success = handle_message(message_type, message_ptr, users, fd);
+                    int success = handle_message(message_type, message_ptr, users, fd, i);
 
                     if (success < 0) {
                         printf("Something went wrong handling message from user with file descriptor %d\n", fd);
@@ -211,16 +248,16 @@ int main(int argc, char **argv) {
 
     printf("Shutting down server...\n");
     // Close all open fds
-    for (int i = 0; i < nfds; ++i) close(pfds[i].fd);
+    for (int i = 1; i < nfds; ++i) close(pfds[i].fd);
     free(pfds);
     close(listen_fd);
 
     return EXIT_SUCCESS;
 }
 
-int handle_message(int message_type, void* message_ptr, User* users[MAX_CLIENTS], int user_fd) {
+int handle_message(int message_type, void* message_ptr, User* users[MAX_CLIENTS], int user_fd, int user_index) {
 
-    User* source_user = users[user_fd];
+    User* source_user = users[user_index];
     switch (message_type) {
 
         case USER_CREATION:
@@ -235,20 +272,20 @@ int handle_message(int message_type, void* message_ptr, User* users[MAX_CLIENTS]
 
             User* instanciated_user = createUser(userCreationMes.username);
             // update user 
-            users[user_fd] = instanciated_user;
+            users[user_index] = instanciated_user;
 
             //acknowledge client 
             MessageUserRegistration msg;
-            msg.user_id = user_fd;
+            msg.user_id = user_index;
             sendMessageUserRegistration(user_fd, msg);
 
             break;
 
         case GET_USER_LIST:
             if (source_user == NULL) {
-                printf("error: Got a request from an unregistered user.");
+                printf("error: Got a request from an unregistered user.\n");
             }
-            printf("Received users list request from %s", users[user_fd]->username);
+            printf("Received users list request from %s.\n", users[user_index]->username);
             fflush(stdout);
 
             // list all users 
@@ -256,7 +293,7 @@ int handle_message(int message_type, void* message_ptr, User* users[MAX_CLIENTS]
             int user_ids[MAX_CLIENTS];
             int users_count = 0;
             for (int user_id = 0; user_id < MAX_CLIENTS; ++user_id) {
-                if (users[user_id] != NULL && user_id != user_fd) {
+                if (users[user_id] != NULL && user_id != user_index) {
                     // we found an user 
                     strcpy(usernames[users_count], users[user_id]->username);
                     user_ids[users_count] = user_id;
@@ -265,14 +302,14 @@ int handle_message(int message_type, void* message_ptr, User* users[MAX_CLIENTS]
             }
 
             // send result to client
-            sendUserList(user_fd, usernames, user_ids ,users_count);
+            sendUserList(user_fd, usernames, user_ids, users_count);
 
             break;
 
         case QUEUE_REQUEST:
             // check that user is indeed created
             if (source_user == NULL) {
-                printf("error: Got a request from an unregistered user.");
+                printf("error: Got a request from an unregistered user.\n");
             }
 
             break;

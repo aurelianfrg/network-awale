@@ -53,6 +53,7 @@ int main(int argc, char **argv) {
     struct sockaddr_in srv;
     int port = atoi(argv[2]);
     const char *server_ip = argv[1];
+    printf("before connection.\n");
     connect_to_server(server_ip, port, &sock, &srv);
     printf("first connection successful.\n");
 
@@ -73,7 +74,7 @@ int main(int argc, char **argv) {
         printf("Server acknowledged user registration with id %d.\n", msg.user_id);
     } 
     else {
-        printf("Server did not acknowledge user registration");
+        printf("Server did not acknowledge user registration.\n");
     }
 
     // second creation that should fail
@@ -88,6 +89,15 @@ int main(int argc, char **argv) {
     MessageUserCreation user_creation_msg2;
     strcpy(user_creation_msg2.username, "Anatouuu");
     sendMessageUserCreation(sock2, user_creation_msg2);
+    recv(sock, &message_type, sizeof(int), 0);
+    if (message_type == USER_REGISTRATION) {
+        MessageUserRegistration msg;
+        recv(sock, &msg, sizeof(msg), 0);
+        printf("Server acknowledged user registration with id %d.\n", msg.user_id);
+    } 
+    else {
+        printf("Server did not acknowledge user registration.\n");
+    }
 
     // init a third connection
     int sock3;
@@ -97,6 +107,15 @@ int main(int argc, char **argv) {
     MessageUserCreation user_creation_msg3;
     strcpy(user_creation_msg3.username, "autre");
     sendMessageUserCreation(sock3, user_creation_msg3);
+    recv(sock, &message_type, sizeof(int), 0);
+    if (message_type == USER_REGISTRATION) {
+        MessageUserRegistration msg;
+        recv(sock, &msg, sizeof(msg), 0);
+        printf("Server acknowledged user registration with id %d.\n", msg.user_id);
+    } 
+    else {
+        printf("Server did not acknowledge user registration.\n");
+    }
 
     // get users list
     sendMessageGetUserList(sock);
