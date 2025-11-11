@@ -1,5 +1,13 @@
 #pragma once 
 
+#include <sys/socket.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <unistd.h>
+#include <signal.h>
+
 #include "game.h"
 #define MAX_CLIENTS 1024
 
@@ -48,6 +56,13 @@ typedef struct MessageGameEnd {
 typedef struct MessageGameMove {
     GameSnapshot snapshot;
 } MessageGameMove;
+
+
+int isMessageComplete(int message_type, ssize_t r);
+// returns the difference between message expected lentgh and actual received lentgh
+// if < 0, message was too long and most likely another message was transmitted at the same time
+// if = 0, the message was in full
+// if > 0, the message was only partly received
 
 void sendMessageUserCreation(int fd, MessageUserCreation message);
 void sendMessageUserRegistration(int fd, MessageUserRegistration message);

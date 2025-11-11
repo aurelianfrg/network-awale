@@ -24,7 +24,7 @@ int set_nonblocking(int fd) {
     return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
-void disconnect_user(int* user_index, int fd, User* users[MAX_CLIENTS], struct pollfd *pfds, int * nfds) {
+void disconnectUser(int* user_index, int fd, User* users[MAX_CLIENTS], struct pollfd *pfds, int * nfds) {
     printf("Client %d with fd %d disconnected.\n", *user_index, fd);
     close(fd);
     // remove this pfds entry by shifting
@@ -41,6 +41,8 @@ void disconnect_user(int* user_index, int fd, User* users[MAX_CLIENTS], struct p
     --(*nfds);
     --(*user_index); // check the moved one on next iteration
 }
+
+
 
 int main(int argc, char **argv) {
     if (argc != 2) {
@@ -164,7 +166,7 @@ int main(int argc, char **argv) {
 
             if (re & (POLLERR | POLLHUP | POLLNVAL)) {
                 // client disconnected/error
-                disconnect_user(&i, fd, users, pfds, &nfds);             
+                disconnectUser(&i, fd, users, pfds, &nfds);             
                 continue;
             }
 
@@ -173,13 +175,13 @@ int main(int argc, char **argv) {
                 if (r < 0) {
                     if (errno == EAGAIN || errno == EWOULDBLOCK) continue;
                     perror("recv");
-                    disconnect_user(&i, fd, users, pfds, &nfds);                
+                    disconnectUser(&i, fd, users, pfds, &nfds);                
                     continue;
 
                 } else if (r == 0) {
                     // client closed
                     printf("Client %d with fd %d disconnected.\n", i, fd);
-                    disconnect_user(&i, fd, users, pfds, &nfds);               
+                    disconnectUser(&i, fd, users, pfds, &nfds);               
                     continue;
 
                 } else {
@@ -196,7 +198,7 @@ int main(int argc, char **argv) {
                     void* message_ptr = (void*) ((int*)buf+1);
 
                     // TODO: change this mecanism to handle the case where several message are received at once in the same buffer
-                    int success = handle_message(message_type, message_ptr, users, fd, i);
+                    int success = handleMessage(message_type, message_ptr, r, users, fd, i);
 
                     if (success < 0) {
                         printf("Something went wrong handling message from user with file descriptor %d\n", fd);
@@ -208,14 +210,22 @@ int main(int argc, char **argv) {
 
     printf("Shutting down server...\n");
     // Close all open fds
-    for (int i = 1; i < nfds; ++i) close(pfds[i].fd);
+    for (int i = 1; i < nfds; ++i) {
+        close(pfds[i].fd);
+        if (users[i] != NULL) free(users[i]);
+    }
     free(pfds);
     close(listen_fd);
 
     return EXIT_SUCCESS;
 }
 
-int handle_message(int message_type, void* message_ptr, User* users[MAX_CLIENTS], int user_fd, int user_index) {
+
+int handleMessage(int message_type, void* message_ptr, ssize_t r, User* users[MAX_CLIENTS], int user_fd, int user_index) {
+
+    // checking if message was received in full
+    int diff = isMessageComplete(message_type, r);
+    printf("lentgh difference between expected and received message size : %d\n", diff);
 
     User* source_user = users[user_index];
     switch (message_type) {

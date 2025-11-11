@@ -1,5 +1,5 @@
 #include "communication.h"
-#include <sys/socket.h>
+
 
     // USER_CREATION,          // client -> server
     // USER_REGISTRATION,      // server -> client
@@ -10,6 +10,36 @@
     // GAME_END,               // server -> client
     // GAME_MOVE,              // client -> server
     // GAME_ILLEGAL_MOVE       // server -> client
+
+
+int isMessageComplete(int message_type, ssize_t r) {
+// returns the difference between message expected lentgh and actual received lentgh
+// if < 0, message was too long and most likely another message was transmitted at the same time
+// if = 0, the message was in full
+// if > 0, the message was only partly received
+    int res;
+    switch (message_type) {
+        case USER_CREATION:
+            res = sizeof(int) + sizeof(MessageUserCreation) - r;
+            break;
+        // case USER_REGISTRATION:
+        //     res = sizeof(int) + sizeof(MessageUserRegistration) - r;
+        //     break;
+        case GET_USER_LIST:
+            res = sizeof(int) - r;
+            break;
+        case QUEUE_REQUEST:
+            res = sizeof(int) + sizeof(MessageQueueRequest) - r;
+            break;
+        case GAME_MOVE:
+            res = sizeof(int) + sizeof(MessageGameMove) - r;
+            break;       
+
+        default: 
+            printf("error: unknown length for message of type %d.\n", message_type);
+    }
+    return res;
+}
 
 
 void sendMessageUserCreation(int fd, MessageUserCreation message) {
