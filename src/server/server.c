@@ -24,23 +24,23 @@ int set_nonblocking(int fd) {
     return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
 }
 
-// void disconnect_user(int* user_index, int fd, User* users[MAX_CLIENTS], struct pollfd *pfds, int * nfds) {
-//     printf("Client %d with fd %d disconnected.\n", user_index, fd);
-//     close(fd);
-//     // remove this pfds entry by shifting
-//     pfds[*user_index] = pfds[*nfds - 1];
-//     pfds[*nfds - 1].fd = -1;
-//     pfds[*nfds - 1].events = 0;
-//     pfds[*nfds - 1].revents = 0;
-//     // deallocate user if it exists
-//     if (users[*user_index] != NULL) {
-//         free(users[*user_index]);
-//     }
-//     users[*user_index] = users[*nfds-1];
-//     users[*nfds-1] = NULL;
-//     --(*nfds);
-//     --(*user_index); // check the moved one on next iteration
-// }
+void disconnect_user(int* user_index, int fd, User* users[MAX_CLIENTS], struct pollfd *pfds, int * nfds) {
+    printf("Client %d with fd %d disconnected.\n", *user_index, fd);
+    close(fd);
+    // remove this pfds entry by shifting
+    pfds[*user_index] = pfds[*nfds - 1];
+    pfds[*nfds - 1].fd = -1;
+    pfds[*nfds - 1].events = 0;
+    pfds[*nfds - 1].revents = 0;
+    // deallocate user if it exists
+    if (users[*user_index] != NULL) {
+        free(users[*user_index]);
+    }
+    users[*user_index] = users[*nfds-1];
+    users[*nfds-1] = NULL;
+    --(*nfds);
+    --(*user_index); // check the moved one on next iteration
+}
 
 int main(int argc, char **argv) {
     if (argc != 2) {
@@ -164,21 +164,7 @@ int main(int argc, char **argv) {
 
             if (re & (POLLERR | POLLHUP | POLLNVAL)) {
                 // client disconnected/error
-                printf("Client %d with fd %d disconnected.\n", i, fd);
-                close(fd);
-                // remove this pfds entry by shifting
-                pfds[i] = pfds[nfds - 1];
-                pfds[nfds - 1].fd = -1;
-                pfds[nfds - 1].events = 0;
-                pfds[nfds - 1].revents = 0;
-                // deallocate user if it exists
-                if (users[i] != NULL) {
-                    free(users[i]);
-                }
-                users[i] = users[nfds-1];
-                users[nfds-1] = NULL;
-                nfds--;
-                i--; // check the moved one on next iteration                
+                disconnect_user(&i, fd, users, pfds, &nfds);             
                 continue;
             }
 
@@ -187,39 +173,13 @@ int main(int argc, char **argv) {
                 if (r < 0) {
                     if (errno == EAGAIN || errno == EWOULDBLOCK) continue;
                     perror("recv");
-                    close(fd);
-                    // remove this pfds entry by shifting
-                    pfds[i] = pfds[nfds - 1];
-                    pfds[nfds - 1].fd = -1;
-                    pfds[nfds - 1].events = 0;
-                    pfds[nfds - 1].revents = 0;
-                    // deallocate user if it exists
-                    if (users[i] != NULL) {
-                        free(users[i]);
-                    }
-                    users[i] = users[nfds-1];
-                    users[nfds-1] = NULL;
-                    nfds--;
-                    i--; // check the moved one on next iteration                
+                    disconnect_user(&i, fd, users, pfds, &nfds);                
                     continue;
 
                 } else if (r == 0) {
                     // client closed
                     printf("Client %d with fd %d disconnected.\n", i, fd);
-                    close(fd);
-                    // remove this pfds entry by shifting
-                    pfds[i] = pfds[nfds - 1];
-                    pfds[nfds - 1].fd = -1;
-                    pfds[nfds - 1].events = 0;
-                    pfds[nfds - 1].revents = 0;
-                    // deallocate user if it exists
-                    if (users[i] != NULL) {
-                        free(users[i]);
-                    }
-                    users[i] = users[nfds-1];
-                    users[nfds-1] = NULL;
-                    nfds--;
-                    i--; // check the moved one on next iteration                
+                    disconnect_user(&i, fd, users, pfds, &nfds);               
                     continue;
 
                 } else {
