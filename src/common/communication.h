@@ -20,7 +20,7 @@ enum MessageType {
     MATCH_REQUEST,          // client1 -> server
     MATCH_PROPOSITION,      // server -> client2
     MATCH_RESPONSE,         // client2 -> server | server -> client1
-    MATCH_CANCELLATION,     // client1 -> server
+    MATCH_CANCELLATION,     // client1 -> server | server -> client
     GAME_START,             // server -> client1 & client2
     GAME_UPDATE,            // server -> client
     GAME_END,               // server -> client
@@ -65,6 +65,7 @@ typedef struct MessageMatchProposition {
 } MessageMatchProposition;
 
 
+
 int isMessageComplete(int message_type, ssize_t r);
 // returns the difference between message expected lentgh and actual received lentgh
 // if < 0, message was too long and most likely another message was transmitted at the same time
@@ -82,5 +83,6 @@ void sendMessageGameMove(int fd, MessageGameMove message);
 void sendMessageGetUserList(int fd);
 void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int user_ids[MAX_CLIENTS], int usernames_count);
 
-void sendMatchResponse(int fd, int response);
+void sendMessageMatchResponse(int fd, int response);
 void sendMessageMatchProposition(int fd, MessageMatchProposition message);
+void sendMessageMatchCancellation(int fd);

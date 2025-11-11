@@ -25,17 +25,37 @@ int set_nonblocking(int fd) {
 }
 
 void disconnectUser(int* user_index, int fd, User* users[MAX_CLIENTS], struct pollfd *pfds, int * nfds) {
+
     printf("Client %d with fd %d disconnected.\n", *user_index, fd);
     close(fd);
+
     // remove this pfds entry by shifting
     pfds[*user_index] = pfds[*nfds - 1];
     pfds[*nfds - 1].fd = -1;
     pfds[*nfds - 1].events = 0;
-    pfds[*nfds - 1].revents = 0;
+    pfds[*nfds - 1].revents = 0;    
+
     // deallocate user if it exists
     if (users[*user_index] != NULL) {
+        // end active game it there is one
+        if (users[*user_index]->active_game != NULL && users[*user_index]->active_game->cancelled_game == false) {
+            users[*user_index]->active_game->cancelled_game = true;
+            if (users[*user_index]->active_game->players[BOTTOM] != NULL) {
+                sendMessageMatchCancellation(users[*user_index]->active_game->players[BOTTOM]->fd);
+                users[*user_index]->active_game->players[BOTTOM]->active_game = NULL;
+            }
+            if (users[*user_index]->active_game != NULL && users[*user_index]->active_game->players[TOP] != NULL) {
+                sendMessageMatchCancellation(users[*user_index]->active_game->players[TOP]->fd);
+                users[*user_index]->active_game->players[TOP] = NULL;
+            }
+            
+            free(users[*user_index]->active_game);
+        }
+
         free(users[*user_index]);
+        users[*user_index] = NULL;
     }
+
     users[*user_index] = users[*nfds-1];
     users[*nfds-1] = NULL;
     --(*nfds);
@@ -244,7 +264,7 @@ int handleMessage(int message_type, void* message_ptr, ssize_t r, User* users[MA
             printf("User creation message received\n");
             printf("username : %s\n", userCreationMes.username);
 
-            User* instanciated_user = createUser(userCreationMes.username);
+            User* instanciated_user = createUser(userCreationMes.username, user_fd);
             // update user 
             users[user_index] = instanciated_user;
 
@@ -258,6 +278,7 @@ int handleMessage(int message_type, void* message_ptr, ssize_t r, User* users[MA
         case GET_USER_LIST:
             if (source_user == NULL) {
                 printf("error: Got a request from an unregistered user.\n");
+                return -1;
             }
             printf("Received users list request from %s.\n", users[user_index]->username);
             fflush(stdout);
@@ -284,6 +305,7 @@ int handleMessage(int message_type, void* message_ptr, ssize_t r, User* users[MA
             // check that user is indeed created
             if (source_user == NULL) {
                 printf("error: Got a request from an unregistered user.\n");
+                return -1;
             }
 
             // read message
@@ -292,15 +314,15 @@ int handleMessage(int message_type, void* message_ptr, ssize_t r, User* users[MA
 
             // check that opponent exists 
             if (users[mes.opponent_id] == NULL || users[mes.opponent_id] == source_user) {
-                sendMatchResponse(user_fd, false); // auto cancellation if non-existing or self opponent
+                sendMessageMatchResponse(user_fd, false); // auto cancellation if non-existing or self opponent
             }
             else if (source_user->active_game != NULL) {
-                sendMatchResponse(user_fd, false); // user is already in a game
+                sendMessageMatchResponse(user_fd, false); // user is already in a game
             }
             else {
                 printf("Received game request from user %d (%s) with user %d (%s).\n", user_index, source_user->username, mes.opponent_id, users[mes.opponent_id]->username);
 
-                Game * new_game = calloc(sizeof(Game), 0);
+                Game * new_game = calloc(1, sizeof(Game));
                 new_game->players[BOTTOM] = source_user; 
                 new_game->players[TOP] = users[mes.opponent_id];
                 source_user->pending_game = new_game;       
@@ -316,6 +338,50 @@ int handleMessage(int message_type, void* message_ptr, ssize_t r, User* users[MA
             }
 
             break;
+
+        case MATCH_RESPONSE:
+            // check that user is indeed created
+            if (source_user == NULL) {
+                printf("error: Got a request from an unregistered user.\n");
+                return -1;
+            }
+            
+            // check it has indeed a pending game
+            if (source_user->pending_game == NULL) {
+                printf("error: user %d (%s) sent a response but has no game invite pending.\n", user_index, source_user->username);
+                return -1;
+            }
+
+            // check it has no active game
+            if (source_user->active_game != NULL) {
+                printf("error: user %d (%s) sent a response but has an ongoing game.\n", user_index, source_user->username);
+                return -1;
+            }
+
+            // read msg 
+            int response;
+            memcpy(&response, message_ptr, sizeof(response));
+
+            if (response == true && source_user->pending_game->cancelled_game == false && source_user->pending_game->players[TOP] == source_user) {
+                // start the game
+                source_user->active_game = source_user->pending_game;
+                source_user->active_game->players[BOTTOM]->active_game = source_user->active_game;
+                source_user->active_game->accepted_game = true;
+                setupGame(source_user->active_game);
+
+                source_user->active_game->players[BOTTOM]->pending_game = NULL;
+                source_user->pending_game = NULL;
+
+                printf("Done instanciating a game : \n");
+                simpleGamePrinting(source_user->active_game);
+            }
+            else {
+                return -1;
+            }
+
+            break;
+
+        
 
         default:
             return -1;

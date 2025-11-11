@@ -5,12 +5,11 @@
 
 #include "game.h"
 
-User* createUser(const char name[]) {
-    static int id_count = 0;
+User* createUser(const char name[], int fd) {
 
     User* user = (User*) calloc(1, sizeof(User));
     strcpy(user->username, name);
-    user->id = id_count++;
+    user->fd = fd;
 
     return user;
 }
@@ -21,9 +20,8 @@ Game* initGame(User * user1, User * user2) {
 
     // create players
     game->players[0] = user1;
-    user1->side = TOP;
     game->players[1] = user2;
-    user2->side = BOTTOM;
+
     
     // fill houses with 4 seeds
     for (int i = 0; i < 12; ++i) {
@@ -35,6 +33,17 @@ Game* initGame(User * user1, User * user2) {
 
     return game;
 }
+
+void setupGame(Game* game) {
+    // fill houses with 4 seeds
+    for (int i = 0; i < 12; ++i) {
+        game->snapshot.board.houses[i].seeds = 4;
+    }
+    game->snapshot.turn = BOTTOM;
+    game->snapshot.points[0] = 0;
+    game->snapshot.points[1] = 0;
+}
+
 
 int next_house(int house) {
     return (house+1)%12;
@@ -94,11 +103,9 @@ int playMove(Game* game, Side turn, int selected_house) {
 }
 
 void simpleGamePrinting(Game* game) {
-    printf("%s (%d - BOTTOM) vs %s (%d - TOP) : %s to play\n\n", 
+    printf("%s (BOTTOM) vs %s (TOP) : %s to play\n\n", 
         game->players[0]->username, 
-        game->players[0]->id, 
         game->players[1]->username, 
-        game->players[1]->id, 
         (game->snapshot.turn == BOTTOM ? game->players[BOTTOM]->username : game->players[TOP]->username) 
     );
 

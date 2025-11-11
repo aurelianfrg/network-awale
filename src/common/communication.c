@@ -17,29 +17,28 @@ int isMessageComplete(int message_type, ssize_t r) {
 // if < 0, message was too long and most likely another message was transmitted at the same time
 // if = 0, the message was in full
 // if > 0, the message was only partly received
-    int res;
+    int expected;
     switch (message_type) {
         case USER_CREATION:
-            res = sizeof(int) + sizeof(MessageUserCreation) - r;
+            expected = sizeof(int) + sizeof(MessageUserCreation) ;
             break;
-        // case USER_REGISTRATION:
-        //     res = sizeof(int) + sizeof(MessageUserRegistration) - r;
-        //     break;
         case GET_USER_LIST:
-            res = sizeof(int) - r;
+            expected = sizeof(int);
             break;
         case MATCH_REQUEST:
-            res = sizeof(int) + sizeof(MessageMatchRequest) - r;
+            expected = sizeof(int) + sizeof(MessageMatchRequest);
             break;
         case GAME_MOVE:
-            res = sizeof(int) + sizeof(MessageGameMove) - r;
+            expected = sizeof(int) + sizeof(MessageGameMove);
             break;       
-
+        case MATCH_RESPONSE:
+            expected = sizeof(int) * 2;
+            break;
         default: 
             printf("error: unknown length for message of type %d.\n", message_type);
             exit(-1);
     }
-    return res;
+    return expected - r;
 }
 
 
@@ -177,10 +176,16 @@ void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int user
     send(fd, user_ids, sizeof(int)*MAX_CLIENTS, 0);
 }
 
-void sendMatchResponse(int fd, int response) {
-    int message_type = MATCH_RESPONSE;
-    send(fd, &message_type, sizeof(message_type), 0);
-    send(fd, &response, sizeof(response),0);
+void sendMessageMatchResponse(int fd, int response) {
+    typedef struct MessageWithHeader {
+        int message_type;
+        int response;
+    } MessageWithHeader;
+    MessageWithHeader message_with_header;
+
+    message_with_header.message_type = MATCH_RESPONSE;
+    message_with_header.response = response;
+    send(fd, &message_with_header, sizeof(message_with_header),0);
 }
 
 void sendMessageMatchProposition(int fd, MessageMatchProposition message) {
@@ -195,6 +200,12 @@ void sendMessageMatchProposition(int fd, MessageMatchProposition message) {
 
     send(fd, &message_with_header, sizeof(message_with_header), 0);
 }
+
+void sendMessageMatchCancellation(int fd) {
+    int msg = MATCH_CANCELLATION;
+    send(fd, &msg, sizeof(msg), 0);
+}
+
 
 
 // void sendMessageXXX(int fd, MessageXXX message) {

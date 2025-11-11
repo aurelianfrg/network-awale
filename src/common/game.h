@@ -21,11 +21,10 @@ typedef enum Side {
 } Side;
 
 typedef struct User {
-    int id;
+    int fd;
     char username[USERNAME_LENGTH];
     Game* active_game;
     Game* pending_game;     // placeholder for when an invitation is received
-    Side side;              // 0 : bottom, 1 : top
 } User;
 
 typedef struct Board {
@@ -57,7 +56,9 @@ void simpleGamePrinting(Game* game);
 Game* initGame(User* user1, User* user2);
 // init a game between users
 
-User* createUser(const char name[]);
+void setupGame(Game* game);
+
+User* createUser(const char name[], int fd) ;
 // create an user with a name and a unique id
 
 int playMove(Game* game, Side turn, int selected_house);
