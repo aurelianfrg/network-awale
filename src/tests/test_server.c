@@ -81,6 +81,7 @@ int main(int argc, char **argv) {
     sleep(1);
     sendMessageUserCreation(sock, user_creation_msg);
 
+
     // init a second connection
     int sock2;
     struct sockaddr_in srv2;
@@ -89,10 +90,10 @@ int main(int argc, char **argv) {
     MessageUserCreation user_creation_msg2;
     strcpy(user_creation_msg2.username, "Anatouuu");
     sendMessageUserCreation(sock2, user_creation_msg2);
-    recv(sock, &message_type, sizeof(int), 0);
+    recv(sock2, &message_type, sizeof(int), 0);
     if (message_type == USER_REGISTRATION) {
         MessageUserRegistration msg;
-        recv(sock, &msg, sizeof(msg), 0);
+        recv(sock2, &msg, sizeof(msg), 0);
         printf("Server acknowledged user registration with id %d.\n", msg.user_id);
     } 
     else {
@@ -107,10 +108,10 @@ int main(int argc, char **argv) {
     MessageUserCreation user_creation_msg3;
     strcpy(user_creation_msg3.username, "autre");
     sendMessageUserCreation(sock3, user_creation_msg3);
-    recv(sock, &message_type, sizeof(int), 0);
+    recv(sock3, &message_type, sizeof(int), 0);
     if (message_type == USER_REGISTRATION) {
         MessageUserRegistration msg;
-        recv(sock, &msg, sizeof(msg), 0);
+        recv(sock3, &msg, sizeof(msg), 0);
         printf("Server acknowledged user registration with id %d.\n", msg.user_id);
     } 
     else {
@@ -138,6 +139,19 @@ int main(int argc, char **argv) {
         }
     }
     
+    // try to create a game
+    MessageMatchRequest req;
+    req.opponent_id = 2;
+    sendMessageMatchRequest(sock, req);
+    printf("sending match request from 1 to 2.\n");
+
+    recv(sock2, &message_type, sizeof(int), 0);
+    if (message_type == MATCH_PROPOSITION) {
+        printf("2 received match proposition.\n");
+        MessageMatchProposition invite_msg;
+        recv(sock2, &invite_msg, sizeof(invite_msg), 0);
+        printf("it is from %s.\n", invite_msg.opponent_username);
+    }
 
     getchar();
     return 0;

@@ -198,7 +198,7 @@ int main(int argc, char **argv) {
                     void* message_ptr = (void*) ((int*)buf+1);
 
                     // TODO: change this mecanism to handle the case where several message are received at once in the same buffer
-                    int success = handleMessage(message_type, message_ptr, r, users, fd, i);
+                    int success = handleMessage(message_type, message_ptr, r, users, pfds, fd, i);
 
                     if (success < 0) {
                         printf("Something went wrong handling message from user with file descriptor %d\n", fd);
@@ -221,11 +221,14 @@ int main(int argc, char **argv) {
 }
 
 
-int handleMessage(int message_type, void* message_ptr, ssize_t r, User* users[MAX_CLIENTS], int user_fd, int user_index) {
+int handleMessage(int message_type, void* message_ptr, ssize_t r, User* users[MAX_CLIENTS], struct pollfd *pfds, int user_fd, int user_index) {
 
     // checking if message was received in full
     int diff = isMessageComplete(message_type, r);
-    printf("lentgh difference between expected and received message size : %d\n", diff);
+    if (diff != 0) {
+        printf("lentgh difference between expected and received message size : %d\n", diff);
+        if (diff > 0) return -1; //message not received in full -> cancel operation        
+    }
 
     User* source_user = users[user_index];
     switch (message_type) {
@@ -236,7 +239,8 @@ int handleMessage(int message_type, void* message_ptr, ssize_t r, User* users[MA
                 return -1;
             }
             MessageUserCreation userCreationMes;
-            userCreationMes = * (MessageUserCreation*) message_ptr;
+            memcpy(&userCreationMes, message_ptr, sizeof(MessageUserCreation));
+
             printf("User creation message received\n");
             printf("username : %s\n", userCreationMes.username);
 
@@ -276,10 +280,39 @@ int handleMessage(int message_type, void* message_ptr, ssize_t r, User* users[MA
 
             break;
 
-        case QUEUE_REQUEST:
+        case MATCH_REQUEST:
             // check that user is indeed created
             if (source_user == NULL) {
                 printf("error: Got a request from an unregistered user.\n");
+            }
+
+            // read message
+            MessageMatchRequest mes;
+            memcpy(&mes, message_ptr, sizeof(MessageMatchRequest));
+
+            // check that opponent exists 
+            if (users[mes.opponent_id] == NULL || users[mes.opponent_id] == source_user) {
+                sendMatchResponse(user_fd, false); // auto cancellation if non-existing or self opponent
+            }
+            else if (source_user->active_game != NULL) {
+                sendMatchResponse(user_fd, false); // user is already in a game
+            }
+            else {
+                printf("Received game request from user %d (%s) with user %d (%s).\n", user_index, source_user->username, mes.opponent_id, users[mes.opponent_id]->username);
+
+                Game * new_game = calloc(sizeof(Game), 0);
+                new_game->players[BOTTOM] = source_user; 
+                new_game->players[TOP] = users[mes.opponent_id];
+                source_user->pending_game = new_game;       
+                users[mes.opponent_id]->pending_game = new_game;
+
+                // send invite
+                MessageMatchProposition invite_msg;
+                invite_msg.opponent_id = user_index;
+                strcpy(invite_msg.opponent_username, source_user->username);
+                
+                int target_fd = pfds[mes.opponent_id].fd;
+                sendMessageMatchProposition(target_fd, invite_msg);
             }
 
             break;

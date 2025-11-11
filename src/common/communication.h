@@ -15,11 +15,13 @@
 enum MessageType {
     USER_CREATION,          // client -> server
     USER_REGISTRATION,      // server -> client
-    GET_USER_LIST,
-    SEND_USER_LIST,
-    QUEUE_REQUEST,          // client -> server
-    QUEUE_ACKNWOLEDGEMENT,  // server -> client
-    GAME_START,             // server -> client
+    GET_USER_LIST,          // client -> server
+    SEND_USER_LIST,         // server -> client
+    MATCH_REQUEST,          // client1 -> server
+    MATCH_PROPOSITION,      // server -> client2
+    MATCH_RESPONSE,         // client2 -> server | server -> client1
+    MATCH_CANCELLATION,     // client1 -> server
+    GAME_START,             // server -> client1 & client2
     GAME_UPDATE,            // server -> client
     GAME_END,               // server -> client
     GAME_MOVE,              // client -> server
@@ -35,12 +37,12 @@ typedef struct MessageUserRegistration {
     unsigned int user_id;
 } MessageUserRegistration;
 
-typedef struct MessageQueueRequest {
-    User user;
-} MessageQueueRequest;
+typedef struct MessageMatchRequest {
+    int opponent_id;
+} MessageMatchRequest;
 
 typedef struct MessageGameStart {
-    User opponent;
+    char opponent_username[USERNAME_LENGTH];
     Side player_side;
     GameSnapshot first_snapshot;
 } MessageGameStart;
@@ -57,6 +59,11 @@ typedef struct MessageGameMove {
     GameSnapshot snapshot;
 } MessageGameMove;
 
+typedef struct MessageMatchProposition {
+    int opponent_id;
+    char opponent_username[USERNAME_LENGTH];
+} MessageMatchProposition;
+
 
 int isMessageComplete(int message_type, ssize_t r);
 // returns the difference between message expected lentgh and actual received lentgh
@@ -66,7 +73,7 @@ int isMessageComplete(int message_type, ssize_t r);
 
 void sendMessageUserCreation(int fd, MessageUserCreation message);
 void sendMessageUserRegistration(int fd, MessageUserRegistration message);
-void sendMessageQueueRequest(int fd, MessageQueueRequest message);
+void sendMessageMatchRequest(int fd, MessageMatchRequest message);
 void sendMessageGameStart(int fd, MessageGameStart message);
 void sendMessageGameUpdate(int fd, MessageGameUpdate message);
 void sendMessageGameEnd(int fd, MessageGameEnd message);
@@ -74,3 +81,6 @@ void sendMessageGameMove(int fd, MessageGameMove message);
 
 void sendMessageGetUserList(int fd);
 void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int user_ids[MAX_CLIENTS], int usernames_count);
+
+void sendMatchResponse(int fd, int response);
+void sendMessageMatchProposition(int fd, MessageMatchProposition message);

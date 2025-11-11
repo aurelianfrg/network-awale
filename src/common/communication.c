@@ -28,8 +28,8 @@ int isMessageComplete(int message_type, ssize_t r) {
         case GET_USER_LIST:
             res = sizeof(int) - r;
             break;
-        case QUEUE_REQUEST:
-            res = sizeof(int) + sizeof(MessageQueueRequest) - r;
+        case MATCH_REQUEST:
+            res = sizeof(int) + sizeof(MessageMatchRequest) - r;
             break;
         case GAME_MOVE:
             res = sizeof(int) + sizeof(MessageGameMove) - r;
@@ -37,6 +37,7 @@ int isMessageComplete(int message_type, ssize_t r) {
 
         default: 
             printf("error: unknown length for message of type %d.\n", message_type);
+            exit(-1);
     }
     return res;
 }
@@ -72,15 +73,15 @@ void sendMessageUserRegistration(int fd, MessageUserRegistration message) {
 }
 
 
-void sendMessageQueueRequest(int fd, MessageQueueRequest message) {
+void sendMessageMatchRequest(int fd, MessageMatchRequest message) {
 
     typedef struct MessageWithHeader {
         int message_type;
-        MessageQueueRequest message;
+        MessageMatchRequest message;
     } MessageWithHeader;
 
     MessageWithHeader message_with_header;
-    message_with_header.message_type = QUEUE_REQUEST;
+    message_with_header.message_type = MATCH_REQUEST;
     message_with_header.message = message;
 
     send(fd, &message_with_header, sizeof(message_with_header), 0);
@@ -174,6 +175,25 @@ void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int user
     send(fd, usernames, usernames_count*USERNAME_LENGTH*sizeof(char), 0);
     // then send corresponding ids
     send(fd, user_ids, sizeof(int)*MAX_CLIENTS, 0);
+}
+
+void sendMatchResponse(int fd, int response) {
+    int message_type = MATCH_RESPONSE;
+    send(fd, &message_type, sizeof(message_type), 0);
+    send(fd, &response, sizeof(response),0);
+}
+
+void sendMessageMatchProposition(int fd, MessageMatchProposition message) {
+    typedef struct MessageWithHeader {
+        int message_type;
+        MessageMatchProposition message;
+    } MessageWithHeader;
+
+    MessageWithHeader message_with_header;
+    message_with_header.message_type = MATCH_PROPOSITION;
+    message_with_header.message = message;
+
+    send(fd, &message_with_header, sizeof(message_with_header), 0);
 }
 
 

@@ -24,6 +24,7 @@ typedef struct User {
     int id;
     char username[USERNAME_LENGTH];
     Game* active_game;
+    Game* pending_game;     // placeholder for when an invitation is received
     Side side;              // 0 : bottom, 1 : top
 } User;
 
@@ -41,6 +42,8 @@ typedef struct GameSnapshot {
 } GameSnapshot; 
 
 typedef struct Game {
+    bool accepted_game;
+    bool cancelled_game;
     User* players[2];      // players[TOP] and players[BOTTOM]
     GameSnapshot snapshot;
 } Game;
