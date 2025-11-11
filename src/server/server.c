@@ -253,15 +253,19 @@ int handle_message(int message_type, void* message_ptr, User* users[MAX_CLIENTS]
 
             // list all users 
             char usernames[MAX_CLIENTS][USERNAME_LENGTH];
+            int user_ids[MAX_CLIENTS];
             int users_count = 0;
             for (int user_id = 0; user_id < MAX_CLIENTS; ++user_id) {
                 if (users[user_id] != NULL && user_id != user_fd) {
-                    strcpy(usernames[users_count++], users[user_id]->username);
+                    // we found an user 
+                    strcpy(usernames[users_count], users[user_id]->username);
+                    user_ids[users_count] = user_id;
+                    ++users_count;
                 }
             }
 
             // send result to client
-            sendUserList(user_fd, usernames, users_count);
+            sendUserList(user_fd, usernames, user_ids ,users_count);
 
             break;
 
@@ -272,6 +276,10 @@ int handle_message(int message_type, void* message_ptr, User* users[MAX_CLIENTS]
             }
 
             break;
+
+        default:
+            return -1;
+        
 
     }
     return 0;

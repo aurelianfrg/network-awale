@@ -58,4 +58,4 @@ void sendMessageGameEnd(int fd, MessageGameEnd message);
 void sendMessageGameMove(int fd, MessageGameMove message);
 
 void sendMessageGetUserList(int fd);
-void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int usernames_count);
+void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int user_ids[MAX_CLIENTS], int usernames_count);

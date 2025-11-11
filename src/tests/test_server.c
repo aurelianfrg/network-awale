@@ -54,6 +54,7 @@ int main(int argc, char **argv) {
     int port = atoi(argv[2]);
     const char *server_ip = argv[1];
     connect_to_server(server_ip, port, &sock, &srv);
+    printf("first connection successful.\n");
 
 
     // TESTS
@@ -71,6 +72,9 @@ int main(int argc, char **argv) {
         recv(sock, &msg, sizeof(msg), 0);
         printf("Server acknowledged user registration with id %d.\n", msg.user_id);
     } 
+    else {
+        printf("Server did not acknowledge user registration");
+    }
 
     // second creation that should fail
     sleep(1);
@@ -80,11 +84,19 @@ int main(int argc, char **argv) {
     int sock2;
     struct sockaddr_in srv2;
     connect_to_server(server_ip, port, &sock2, &srv2);
-
     // register the second player
     MessageUserCreation user_creation_msg2;
     strcpy(user_creation_msg2.username, "Anatouuu");
     sendMessageUserCreation(sock2, user_creation_msg2);
+
+    // init a third connection
+    int sock3;
+    struct sockaddr_in srv3;
+    connect_to_server(server_ip, port, &sock3, &srv3);
+    // register the third player
+    MessageUserCreation user_creation_msg3;
+    strcpy(user_creation_msg3.username, "autre");
+    sendMessageUserCreation(sock3, user_creation_msg3);
 
     // get users list
     sendMessageGetUserList(sock);
@@ -98,6 +110,12 @@ int main(int argc, char **argv) {
         for (int i = 0; i < usernames_count; ++i) {
             recv(sock, &buffer, sizeof(char)*USERNAME_LENGTH, 0);
             printf(" - %s\n", buffer);
+        }
+        int id;
+        printf("Corresponding ids : \n");
+        for (int i = 0; i < usernames_count; ++i) {
+            recv(sock, &id, sizeof(int), 0);
+            printf(" - %d\n", id);
         }
     }
     
