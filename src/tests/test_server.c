@@ -153,6 +153,32 @@ int main(int argc, char **argv) {
         printf("it is from %s.\n", invite_msg.opponent_username);
     }
 
+    // user 1 cancels game creation
+    printf("user 1 cancels game.\n");
+    sendMessageMatchCancellation(sock);
+
+    sleep(1);
+
+    // user 2 accepts game creation
+    sendMessageMatchResponse(sock2, true);
+
+    sleep(1);
+
+    // try to create a game again
+    req.opponent_id = 2;
+    sendMessageMatchRequest(sock, req);
+    printf("sending match request from 1 to 2.\n");
+
+    recv(sock2, &message_type, sizeof(int), 0);
+    if (message_type == MATCH_PROPOSITION) {
+        printf("2 received match proposition.\n");
+        MessageMatchProposition invite_msg;
+        recv(sock2, &invite_msg, sizeof(invite_msg), 0);
+        printf("it is from %s.\n", invite_msg.opponent_username);
+    }
+
+    sleep(1);
+    
     // user 2 accepts game creation
     sendMessageMatchResponse(sock2, true);
 

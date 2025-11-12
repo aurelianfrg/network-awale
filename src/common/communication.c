@@ -12,7 +12,7 @@
     // GAME_ILLEGAL_MOVE       // server -> client
 
 
-int isMessageComplete(int message_type, ssize_t r) {
+int isMessageComplete(int32_t message_type, ssize_t r) {
 // returns the difference between message expected lentgh and actual received lentgh
 // if < 0, message was too long and most likely another message was transmitted at the same time
 // if = 0, the message was in full
@@ -20,22 +20,22 @@ int isMessageComplete(int message_type, ssize_t r) {
     int expected;
     switch (message_type) {
         case USER_CREATION:
-            expected = sizeof(int) + sizeof(MessageUserCreation) ;
+            expected = sizeof(int32_t) + sizeof(MessageUserCreation) ;
             break;
         case GET_USER_LIST:
-            expected = sizeof(int);
+            expected = sizeof(int32_t);
             break;
         case MATCH_REQUEST:
-            expected = sizeof(int) + sizeof(MessageMatchRequest);
+            expected = sizeof(int32_t) + sizeof(MessageMatchRequest);
             break;
         case GAME_MOVE:
-            expected = sizeof(int) + sizeof(MessageGameMove);
+            expected = sizeof(int32_t) + sizeof(MessageGameMove);
             break;       
         case MATCH_RESPONSE:
-            expected = sizeof(int) * 2;
+            expected = sizeof(int32_t) * 2;
             break;
         case MATCH_CANCELLATION:
-            expected = sizeof(int);
+            expected = sizeof(int32_t);
             break;
         default: 
             printf("error: unknown length for message of type %d.\n", message_type);
@@ -48,7 +48,7 @@ int isMessageComplete(int message_type, ssize_t r) {
 void sendMessageUserCreation(int fd, MessageUserCreation message) {
 
     typedef struct MessageWithHeader {
-        int message_type;
+        int32_t message_type;
         MessageUserCreation message;
     } MessageWithHeader;
 
@@ -63,7 +63,7 @@ void sendMessageUserCreation(int fd, MessageUserCreation message) {
 void sendMessageUserRegistration(int fd, MessageUserRegistration message) {
 
     typedef struct MessageWithHeader {
-        int message_type;
+        int32_t message_type;
         MessageUserRegistration message;
     } MessageWithHeader;
 
@@ -78,7 +78,7 @@ void sendMessageUserRegistration(int fd, MessageUserRegistration message) {
 void sendMessageMatchRequest(int fd, MessageMatchRequest message) {
 
     typedef struct MessageWithHeader {
-        int message_type;
+        int32_t message_type;
         MessageMatchRequest message;
     } MessageWithHeader;
 
@@ -93,7 +93,7 @@ void sendMessageMatchRequest(int fd, MessageMatchRequest message) {
 void sendMessageGameStart(int fd, MessageGameStart message) {
 
     typedef struct MessageWithHeader {
-        int message_type;
+        int32_t message_type;
         MessageGameStart message;
     } MessageWithHeader;
 
@@ -107,7 +107,7 @@ void sendMessageGameStart(int fd, MessageGameStart message) {
 void sendMessageGameUpdate(int fd, MessageGameUpdate message) {
 
     typedef struct MessageWithHeader {
-        int message_type;
+        int32_t message_type;
         MessageGameUpdate message;
     } MessageWithHeader;
 
@@ -120,7 +120,7 @@ void sendMessageGameUpdate(int fd, MessageGameUpdate message) {
 void sendMessageGameEnd(int fd, MessageGameEnd message) {
 
     typedef struct MessageWithHeader {
-        int message_type;
+        int32_t message_type;
         MessageGameEnd message;
     } MessageWithHeader;
 
@@ -133,7 +133,7 @@ void sendMessageGameEnd(int fd, MessageGameEnd message) {
 void sendMessageGameMove(int fd, MessageGameMove message) {
 
     typedef struct MessageWithHeader {
-        int message_type;
+        int32_t message_type;
         MessageGameMove message;
     } MessageWithHeader;
 
@@ -160,28 +160,27 @@ void sendMessageIllegalMove(int fd) {
 }
 
 void sendMessageGetUserList(int fd) {
-    int message_type = GET_USER_LIST;
+    int32_t message_type = GET_USER_LIST;
     send(fd, &message_type, sizeof(message_type), 0);
 }
 
-void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int user_ids[MAX_CLIENTS], int usernames_count) {
+void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int32_t user_ids[MAX_CLIENTS], int32_t usernames_count) {
+    // send number of users, then usernames, then ids
+    int32_t message_type = SEND_USER_LIST;
 
-    // first send message type
-    int message_type = SEND_USER_LIST;
-    send(fd, &message_type, sizeof(int), 0);
+    ssize_t message_length = sizeof(message_type) * 2 + usernames_count*USERNAME_LENGTH*sizeof(char) + sizeof(usernames_count)*MAX_CLIENTS;
+    char* buffer = calloc(1, message_length);
+    memcpy(buffer, &message_type, sizeof(message_type));
+    memcpy(buffer+sizeof(message_type), &usernames_count, sizeof(usernames_count));
+    memcpy(buffer+sizeof(message_type)+sizeof(usernames_count), usernames, usernames_count*USERNAME_LENGTH*sizeof(char));
+    memcpy(buffer+sizeof(message_type)+sizeof(usernames_count)+usernames_count*USERNAME_LENGTH*sizeof(char), user_ids, sizeof(int32_t)*usernames_count);
 
-    // then announce how many usernames are sent
-    send(fd, &usernames_count, sizeof(int), 0);
-
-    // then send usernames
-    send(fd, usernames, usernames_count*USERNAME_LENGTH*sizeof(char), 0);
-    // then send corresponding ids
-    send(fd, user_ids, sizeof(int)*MAX_CLIENTS, 0);
+    send(fd, buffer, message_length, 0);
 }
 
 void sendMessageMatchResponse(int fd, int response) {
     typedef struct MessageWithHeader {
-        int message_type;
+        int32_t message_type;
         int response;
     } MessageWithHeader;
     MessageWithHeader message_with_header;
@@ -193,7 +192,7 @@ void sendMessageMatchResponse(int fd, int response) {
 
 void sendMessageMatchProposition(int fd, MessageMatchProposition message) {
     typedef struct MessageWithHeader {
-        int message_type;
+        int32_t message_type;
         MessageMatchProposition message;
     } MessageWithHeader;
 
@@ -214,7 +213,7 @@ void sendMessageMatchCancellation(int fd) {
 // void sendMessageXXX(int fd, MessageXXX message) {
 
 //     typedef struct MessageWithHeader {
-//         int message_type;
+//         int32_t message_type;
 //         MessageXXX message;
 //     } MessageWithHeader;
 

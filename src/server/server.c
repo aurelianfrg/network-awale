@@ -360,7 +360,7 @@ int handleMessage(int message_type, void* message_ptr, ssize_t r, User* users[MA
             }
 
             // read msg 
-            int response;
+            int32_t response;
             memcpy(&response, message_ptr, sizeof(response));
 
             if (response == true && source_user->pending_game->cancelled_game == false && source_user->pending_game->players[TOP] == source_user) {
@@ -394,18 +394,35 @@ int handleMessage(int message_type, void* message_ptr, ssize_t r, User* users[MA
                 printf("error: user %d (%s) sent a cancellation but has no game invite pending or active game.\n", user_index, source_user->username);
                 return -1;
             }
-
-            // check it has indeed a pending game or an active game
-            if (source_user->pending_game == NULL && source_user->active_game == NULL) {
-                printf("error: user %d (%s) sent a cancellation but has no game invite pending or active game.\n", user_index, source_user->username);
+            if (source_user->pending_game != NULL && source_user->active_game != NULL) {
+                printf("error: user %d (%s) has both active and pending game.\n", user_index, source_user->username);
                 return -1;
             }
 
             // apply cancellation
-
-
-
+            if (source_user->active_game != NULL) {
+                printf("request from user %d (%s) to cancel active game.\n", user_index, source_user->username);
+                // cancel active game
+                source_user->active_game->cancelled_game = true;
+                sendMessageMatchCancellation(source_user->active_game->players[TOP]->fd);
+                sendMessageMatchCancellation(source_user->active_game->players[BOTTOM]->fd);
+                Game* active_game = source_user->active_game;
+                active_game->players[BOTTOM]->active_game = NULL;
+                active_game->players[TOP]->active_game = NULL;
+            }
+            else {
+                printf("request from user %d (%s) to cancel pending game invite.\n", user_index, source_user->username);
+                source_user->pending_game->cancelled_game = true;
+                sendMessageMatchCancellation(source_user->pending_game->players[TOP]->fd);
+                sendMessageMatchCancellation(source_user->pending_game->players[BOTTOM]->fd);
+                Game* pending_game = source_user->pending_game;
+                pending_game->players[BOTTOM]->pending_game = NULL;
+                pending_game->players[TOP]->pending_game = NULL;
+            }
             break;
+
+        case GAME_MOVE:
+            
 
         default:
             return -1;

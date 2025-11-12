@@ -34,11 +34,11 @@ typedef struct MessageUserCreation {
 } MessageUserCreation;
 
 typedef struct MessageUserRegistration {
-    unsigned int user_id;
+    int32_t user_id;
 } MessageUserRegistration;
 
 typedef struct MessageMatchRequest {
-    int opponent_id;
+    int32_t opponent_id;
 } MessageMatchRequest;
 
 typedef struct MessageGameStart {
@@ -56,11 +56,11 @@ typedef struct MessageGameEnd {
 } MessageGameEnd;
 
 typedef struct MessageGameMove {
-    GameSnapshot snapshot;
+    int32_t selected_house;
 } MessageGameMove;
 
 typedef struct MessageMatchProposition {
-    int opponent_id;
+    int32_t opponent_id;
     char opponent_username[USERNAME_LENGTH];
 } MessageMatchProposition;
 
