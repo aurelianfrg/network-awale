@@ -79,6 +79,7 @@ void sendMessageGameStart(int fd, MessageGameStart message);
 void sendMessageGameUpdate(int fd, MessageGameUpdate message);
 void sendMessageGameEnd(int fd, MessageGameEnd message);
 void sendMessageGameMove(int fd, MessageGameMove message);
+void sendMessageGameIllegalMove(int fd);
 
 void sendMessageGetUserList(int fd);
 void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int user_ids[MAX_CLIENTS], int usernames_count);

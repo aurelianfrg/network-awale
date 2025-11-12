@@ -141,9 +141,9 @@ int main(int argc, char **argv) {
     
     // try to create a game
     MessageMatchRequest req;
-    req.opponent_id = 2;
+    req.opponent_id = 1;
     sendMessageMatchRequest(sock, req);
-    printf("sending match request from 1 to 2.\n");
+    printf("sending match request from 0 to 1.\n");
 
     recv(sock2, &message_type, sizeof(int), 0);
     if (message_type == MATCH_PROPOSITION) {
@@ -165,9 +165,9 @@ int main(int argc, char **argv) {
     sleep(1);
 
     // try to create a game again
-    req.opponent_id = 2;
+    req.opponent_id = 1;
     sendMessageMatchRequest(sock, req);
-    printf("sending match request from 1 to 2.\n");
+    printf("sending match request from 0 to 1.\n");
 
     recv(sock2, &message_type, sizeof(int), 0);
     if (message_type == MATCH_PROPOSITION) {

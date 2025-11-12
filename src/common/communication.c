@@ -204,9 +204,15 @@ void sendMessageMatchProposition(int fd, MessageMatchProposition message) {
 }
 
 void sendMessageMatchCancellation(int fd) {
-    int msg = MATCH_CANCELLATION;
+    int32_t msg = MATCH_CANCELLATION;
     send(fd, &msg, sizeof(msg), 0);
 }
+
+void sendMessageGameIllegalMove(int fd) {
+    int32_t msg = GAME_ILLEGAL_MOVE;
+    send(fd, &msg, sizeof(msg), 0);
+}
+
 
 
 

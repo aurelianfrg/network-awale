@@ -26,6 +26,11 @@ int set_nonblocking(int fd) {
 
 void disconnectUser(int* user_index, int fd, User* users[MAX_CLIENTS], struct pollfd *pfds, int * nfds) {
 
+    if (users[*user_index] == NULL) {
+        // user already disconnected
+        return;
+    }
+
     printf("Client %d with fd %d disconnected.\n", *user_index, fd);
     close(fd);
 
@@ -205,12 +210,6 @@ int main(int argc, char **argv) {
                     continue;
 
                 } else {
-
-                    // index user using fd, which identifies it and never changes
-                    if (fd >= MAX_CLIENTS) {
-                        printf("error : a file descriptor is higher than the max number of clients");
-                    }
-                    
                     // standard case : process how you handle the client when a message was received
                     printf("\nMessage length : %lu\n",r);
                     int message_type;
@@ -271,7 +270,7 @@ int handleMessage(int message_type, void* message_ptr, ssize_t r, User* users[MA
 
             //acknowledge client 
             MessageUserRegistration msg;
-            msg.user_id = user_index;
+            msg.user_id = instanciated_user->id;
             sendMessageUserRegistration(user_fd, msg);
 
             break;
@@ -288,11 +287,11 @@ int handleMessage(int message_type, void* message_ptr, ssize_t r, User* users[MA
             char usernames[MAX_CLIENTS][USERNAME_LENGTH];
             int user_ids[MAX_CLIENTS];
             int users_count = 0;
-            for (int user_id = 0; user_id < MAX_CLIENTS; ++user_id) {
-                if (users[user_id] != NULL && user_id != user_index) {
+            for (int i = 0; i < MAX_CLIENTS; ++i) {
+                if (users[i] != NULL && i != user_index) {
                     // we found an user 
-                    strcpy(usernames[users_count], users[user_id]->username);
-                    user_ids[users_count] = user_id;
+                    strcpy(usernames[users_count], users[i]->username);
+                    user_ids[users_count] = users[i]->id;
                     ++users_count;
                 }
             }
@@ -308,33 +307,53 @@ int handleMessage(int message_type, void* message_ptr, ssize_t r, User* users[MA
                 printf("error: Got a request from an unregistered user.\n");
                 return -1;
             }
+            printf("Received a match request from user %d.\n", user_index);
 
             // read message
             MessageMatchRequest mes;
             memcpy(&mes, message_ptr, sizeof(MessageMatchRequest));
 
+            // find opponent user by id
+            User* opponent = NULL;
+            for (int i = 0; i < MAX_CLIENTS; ++i) {
+                if (users[i] != NULL && users[i]->id == mes.opponent_id) {
+                    opponent = users[i];
+                }
+            }
+            if (opponent == NULL) {
+                printf("Unable to find opponent with asked id.\n");
+                sendMessageMatchResponse(user_fd, false);
+                return -1;
+            }
+
             // check that opponent exists 
-            if (users[mes.opponent_id] == NULL || users[mes.opponent_id] == source_user) {
+            if (opponent == source_user) {
+                printf("error: cannot create a game with oneself.\n");
                 sendMessageMatchResponse(user_fd, false); // auto cancellation if non-existing or self opponent
             }
-            else if (source_user->active_game != NULL) {
-                sendMessageMatchResponse(user_fd, false); // user is already in a game
+            else if (source_user->active_game != NULL || opponent->active_game != NULL) {
+                printf("error: an user already has an active game.\n");
+                sendMessageMatchResponse(user_fd, false); // one of 2 users is already in a game
+            }
+            else if (source_user->pending_game != NULL || opponent->pending_game != NULL) {
+                printf("error: an user already has a pending invite.\n");
+                sendMessageMatchResponse(user_fd, false); // one of 2 users already has an invite
             }
             else {
-                printf("Received game request from user %d (%s) with user %d (%s).\n", user_index, source_user->username, mes.opponent_id, users[mes.opponent_id]->username);
+                printf("Received game request from user %s (id %d) with user %s (id %d).\n", source_user->username, source_user->id, opponent->username, opponent->id);
 
                 Game * new_game = calloc(1, sizeof(Game));
                 new_game->players[BOTTOM] = source_user; 
-                new_game->players[TOP] = users[mes.opponent_id];
+                new_game->players[TOP] = opponent;
                 source_user->pending_game = new_game;       
-                users[mes.opponent_id]->pending_game = new_game;
+                opponent->pending_game = new_game;
 
                 // send invite
                 MessageMatchProposition invite_msg;
-                invite_msg.opponent_id = user_index;
+                invite_msg.opponent_id = source_user->id;
                 strcpy(invite_msg.opponent_username, source_user->username);
                 
-                int target_fd = pfds[mes.opponent_id].fd;
+                int target_fd = opponent->fd;
                 sendMessageMatchProposition(target_fd, invite_msg);
             }
 
@@ -422,7 +441,47 @@ int handleMessage(int message_type, void* message_ptr, ssize_t r, User* users[MA
             break;
 
         case GAME_MOVE:
+            // check that user is indeed created
+            if (source_user == NULL) {
+                printf("error: Got a request from an unregistered user.\n");
+                return -1;
+            }
             
+            // check it has indeed an active game
+            if (source_user->active_game == NULL) {
+                printf("error: user %d (%s) played a move but has no active game.\n", user_index, source_user->username);
+                return -1;
+            }
+
+            MessageGameMove move_message;
+            memcpy(&move_message, message_ptr, sizeof(MessageGameMove));
+            Game* game = source_user->active_game;
+            
+            // check it was the right user that played the move
+            int valid_move;
+            if ( game->snapshot.turn == BOTTOM && source_user == game->players[BOTTOM]) {
+                printf("BOTTOM user %d (%s) played the move %d", user_index, source_user->username, move_message.selected_house);
+                valid_move = (playMove(game, BOTTOM, move_message.selected_house) == 0);
+            }
+            if ( game->snapshot.turn == TOP && source_user == game->players[TOP]) {
+                printf("TOP user %d (%s) played the move %d", user_index, source_user->username, move_message.selected_house);
+                valid_move = (playMove(game, TOP, move_message.selected_house) == 0);
+            }
+            else {
+                valid_move = false;
+            }
+
+            if (!valid_move) {
+                sendMessageGameIllegalMove(source_user->fd);
+            }
+            else {
+                printf("Valide move played by user %d (%s), game updated.\n", user_index, source_user->username);
+                MessageGameUpdate update;
+                update.snapshot = game->snapshot;
+                sendMessageGameUpdate(game->players[BOTTOM]->fd, update);
+                sendMessageGameUpdate(game->players[TOP]->fd, update);
+                simpleGamePrinting(game);
+            }
 
         default:
             return -1;
