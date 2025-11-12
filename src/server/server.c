@@ -37,8 +37,10 @@ void disconnectUser(int* user_index, int fd, User* users[MAX_CLIENTS], struct po
     // deallocate user if it exists
     if (users[*user_index] != NULL) {
         // end active game it there is one
+        printf("Removing corresponding user.\n");
         if (users[*user_index]->active_game != NULL && users[*user_index]->active_game->cancelled_game == false) {
             users[*user_index]->active_game->cancelled_game = true;
+            printf("Cancelling a game as a result.\n");
             if (users[*user_index]->active_game->players[BOTTOM] != NULL) {
                 sendMessageMatchCancellation(users[*user_index]->active_game->players[BOTTOM]->fd);
                 users[*user_index]->active_game->players[BOTTOM]->active_game = NULL;
@@ -382,11 +384,16 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
                 return -1;
             }
 
+            if (source_user->pending_game->players[TOP] != source_user) {
+                printf("error: user %d (%s) sent a response but was not the one invited in the game.\n", user_index, source_user->username);
+                return -1;
+            }
+
             // read msg 
             int32_t response;
             memcpy(&response, message_ptr, sizeof(response));
 
-            if (response == true && source_user->pending_game->cancelled_game == false && source_user->pending_game->players[TOP] == source_user) {
+            if (response == true && source_user->pending_game->cancelled_game == false) {
                 // start the game
                 source_user->active_game = source_user->pending_game;
                 source_user->active_game->players[BOTTOM]->active_game = source_user->active_game;
@@ -411,6 +418,8 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
                 sendMessageGameStart(source_user->active_game->players[TOP]->fd, start_mes);
             }
             else {
+                // warn initial user that his invite did not result in a game creation
+                sendMessageMatchResponse(source_user->pending_game->players[BOTTOM]->fd, false);
                 return -1;
             }
 
