@@ -12,7 +12,7 @@
 #define MAX_CLIENTS 1024
 
 
-enum MessageType {
+typedef enum MessageType {
     USER_CREATION,          // client -> server
     USER_REGISTRATION,      // server -> client
     GET_USER_LIST,          // client -> server
@@ -26,7 +26,7 @@ enum MessageType {
     GAME_END,               // server -> client
     GAME_MOVE,              // client -> server
     GAME_ILLEGAL_MOVE       // server -> client
-};
+} MessageType;
 
 
 typedef struct MessageUserCreation {
@@ -66,7 +66,7 @@ typedef struct MessageMatchProposition {
 
 
 
-int isMessageComplete(int message_type, ssize_t r);
+int isMessageComplete(int32_t message_type, ssize_t r);
 // returns the difference between message expected lentgh and actual received lentgh
 // if < 0, message was too long and most likely another message was transmitted at the same time
 // if = 0, the message was in full

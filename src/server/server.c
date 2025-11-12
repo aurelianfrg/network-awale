@@ -213,9 +213,9 @@ int main(int argc, char **argv) {
                     
                     // standard case : process how you handle the client when a message was received
                     printf("\nMessage length : %lu\n",r);
-                    int message_type;
-                    memcpy(&message_type, buf, sizeof(int));
-                    void* message_ptr = (void*) ((int*)buf+1);
+                    int32_t message_type;
+                    memcpy(&message_type, buf, sizeof(int32_t));
+                    void* message_ptr = (void*) ((int32_t*)buf+1);
 
                     // TODO: change this mecanism to handle the case where several message are received at once in the same buffer
                     int success = handleMessage(message_type, message_ptr, r, users, pfds, fd, i);
@@ -241,7 +241,7 @@ int main(int argc, char **argv) {
 }
 
 
-int handleMessage(int message_type, void* message_ptr, ssize_t r, User* users[MAX_CLIENTS], struct pollfd *pfds, int user_fd, int user_index) {
+int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* users[MAX_CLIENTS], struct pollfd *pfds, int user_fd, int user_index) {
 
     // checking if message was received in full
     int diff = isMessageComplete(message_type, r);
