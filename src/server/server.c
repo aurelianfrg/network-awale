@@ -76,7 +76,7 @@ void cancel_invite(Game* game) {
     free(game);
 }
 
-void cancel_invite(Game* game) {
+void cancel_game(Game* game) {
     if (game == NULL) return;
     game->players[BOTTOM]->active_game = NULL;
     game->players[TOP]->active_game = NULL;
