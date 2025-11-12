@@ -153,7 +153,7 @@ int main(int argc, char **argv) {
         printf("it is from %s.\n", invite_msg.opponent_username);
     }
 
-    // user 2 accepts creation
+    // user 2 accepts game creation
     sendMessageMatchResponse(sock2, true);
 
     getchar();

@@ -21,6 +21,7 @@ typedef enum Side {
 } Side;
 
 typedef struct User {
+    int id;
     int fd;
     char username[USERNAME_LENGTH];
     Game* active_game;

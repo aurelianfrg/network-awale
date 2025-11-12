@@ -251,6 +251,7 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
     }
 
     User* source_user = users[user_index];
+
     switch (message_type) {
 
         case USER_CREATION:
@@ -381,7 +382,30 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
 
             break;
 
-        
+        case MATCH_CANCELLATION:
+            // check that user is indeed created
+            if (source_user == NULL) {
+                printf("error: Got a request from an unregistered user.\n");
+                return -1;
+            }
+            
+            // check it has indeed a pending game or an active game
+            if (source_user->pending_game == NULL && source_user->active_game == NULL) {
+                printf("error: user %d (%s) sent a cancellation but has no game invite pending or active game.\n", user_index, source_user->username);
+                return -1;
+            }
+
+            // check it has indeed a pending game or an active game
+            if (source_user->pending_game == NULL && source_user->active_game == NULL) {
+                printf("error: user %d (%s) sent a cancellation but has no game invite pending or active game.\n", user_index, source_user->username);
+                return -1;
+            }
+
+            // apply cancellation
+
+
+
+            break;
 
         default:
             return -1;
