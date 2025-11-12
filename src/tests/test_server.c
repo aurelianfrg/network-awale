@@ -153,34 +153,52 @@ int main(int argc, char **argv) {
         printf("it is from %s.\n", invite_msg.opponent_username);
     }
 
-    // user 1 cancels game creation
-    printf("user 1 cancels game.\n");
-    sendMessageMatchCancellation(sock);
+    // // user 1 cancels game creation
+    // printf("user 1 cancels game.\n");
+    // sendMessageMatchCancellation(sock);
 
-    sleep(1);
+    // sleep(1);
 
-    // user 2 accepts game creation
-    sendMessageMatchResponse(sock2, true);
+    // // user 2 accepts game creation
+    // sendMessageMatchResponse(sock2, true);
 
-    sleep(1);
+    // sleep(1);
 
-    // try to create a game again
-    req.opponent_id = 1;
-    sendMessageMatchRequest(sock, req);
-    printf("sending match request from 0 to 1.\n");
+    // // try to create a game again
+    // req.opponent_id = 1;
+    // sendMessageMatchRequest(sock, req);
+    // printf("sending match request from 0 to 1.\n");
 
-    recv(sock2, &message_type, sizeof(int), 0);
-    if (message_type == MATCH_PROPOSITION) {
-        printf("2 received match proposition.\n");
-        MessageMatchProposition invite_msg;
-        recv(sock2, &invite_msg, sizeof(invite_msg), 0);
-        printf("it is from %s.\n", invite_msg.opponent_username);
-    }
+    // recv(sock2, &message_type, sizeof(int), 0);
+    // if (message_type == MATCH_PROPOSITION) {
+    //     printf("2 received match proposition.\n");
+    //     MessageMatchProposition invite_msg;
+    //     recv(sock2, &invite_msg, sizeof(invite_msg), 0);
+    //     printf("it is from %s.\n", invite_msg.opponent_username);
+    // }
 
     sleep(1);
     
     // user 2 accepts game creation
     sendMessageMatchResponse(sock2, true);
+
+    recv(sock, &message_type, sizeof(int), 0);
+    MessageGameStart start_mes;
+    if (message_type == GAME_START) {
+        printf("player 0 received game start message.\n");
+        recv(sock, &start_mes, sizeof(start_mes), 0);
+    }
+    else { printf("error: unexpected message %d\n", message_type); }
+
+    recv(sock2, &message_type, sizeof(int), 0);
+    if (message_type == GAME_START) {
+        printf("player 1 received game start message.\n");
+        recv(sock2, &start_mes, sizeof(start_mes), 0);
+        printf("opponent name : %s\n", start_mes.opponent_username);
+        simpleSnapshotPrinting(&start_mes.first_snapshot);
+    }
+    else { printf("error: unexpected message %d\n", message_type); }
+
 
     getchar();
     return 0;

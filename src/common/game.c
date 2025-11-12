@@ -124,3 +124,19 @@ void simpleGamePrinting(Game* game) {
     }
     printf("\n\n");
 }
+
+void simpleSnapshotPrinting(GameSnapshot* snapshot) {
+
+    // print top side
+    for (int i = 11; i > 5; --i) {
+        printf(" %d ", snapshot->board.houses[i].seeds);
+    }
+
+    printf("\n");
+
+    // print bottom side
+    for (int i = 0; i < 6; ++i) {
+        printf(" %d ", snapshot->board.houses[i].seeds);
+    }
+    printf("\n\n");
+}

@@ -74,3 +74,4 @@ char isGameOver(GameSnapshot snapshot);
 Side whoHasWon(GameSnapshot snapshot);
 // return which player has won
 
+void simpleSnapshotPrinting(GameSnapshot* snapshot);

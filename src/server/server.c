@@ -394,6 +394,17 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
 
                 printf("Done instanciating a game : \n");
                 simpleGamePrinting(source_user->active_game);
+
+                MessageGameStart start_mes;
+                start_mes.first_snapshot = source_user->active_game->snapshot;
+
+                strcpy(start_mes.opponent_username, source_user->active_game->players[TOP]->username);
+                start_mes.player_side = BOTTOM;
+                sendMessageGameStart(source_user->active_game->players[BOTTOM]->fd, start_mes);
+
+                strcpy(start_mes.opponent_username, source_user->active_game->players[BOTTOM]->username);
+                start_mes.player_side = TOP;
+                sendMessageGameStart(source_user->active_game->players[TOP]->fd, start_mes);
             }
             else {
                 return -1;

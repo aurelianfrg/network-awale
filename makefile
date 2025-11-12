@@ -38,7 +38,7 @@ $(SERVER): $(OBJ_PATH)/$(SERVER_DIR)/$(SERVER).o  $(OBJ_PATH)/$(COMMON_DIR)/comm
 test_game: $(OBJ_PATH)/$(TEST_DIR)/test_game.o $(OBJ_PATH)/$(COMMON_DIR)/game.o
 	$(GCC) -o $(BIN_PATH)/$@ $^ $(LIBS)
 
-test_server: $(OBJ_PATH)/$(TEST_DIR)/test_server.o $(OBJ_PATH)/$(COMMON_DIR)/communication.o 
+test_server: $(OBJ_PATH)/$(TEST_DIR)/test_server.o $(OBJ_PATH)/$(COMMON_DIR)/communication.o $(OBJ_PATH)/$(COMMON_DIR)/game.o
 	$(GCC) -o $(BIN_PATH)/$@ $^ $(LIBS)
 
 
