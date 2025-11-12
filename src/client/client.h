@@ -20,13 +20,14 @@
 typedef enum NavigationState {
     USER_CREATION_MENU,
     MAIN_MENU,
-    IN_QUEUE_MENU,
+    USER_LIST_MENU,
     GAME_START_MENU,
     IN_GAME_MENU,
     GAME_END_MENU
 } NavigationState;
 
-
+void handle_game_request_popup(int c);
+ssize_t recieve_from_server(void* buffer, size_t size);
 void connect_to_server(const char* server_ip, int port, int* sock_out, struct sockaddr_in* srv_out);
 void processEvents(struct pollfd pfds[2]);
 void changeMenu(NavigationState new_menu);

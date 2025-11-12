@@ -21,7 +21,7 @@ void die(const char *s) {
 }
 
 void dieNoError(const char *s) {
-    terminalClearScreen();
+    // terminalClearScreen();
     write(STDOUT_FILENO, s, strlen(s));
     write(STDOUT_FILENO, "\r\n", 2);
     exit(1);
@@ -861,10 +861,15 @@ void drawDebugColors(GridCharBuffer* gcbuf) {
     }
 }
 
-void drawSolidRect(GridCharBuffer* gcbuf, int start_row, int start_col, int end_row, int end_col, TextStyle* style) {
-    for (int row=start_row; row < end_row; row++) {
-        for (int col=start_col; col < end_col; col++) {
-            putGcbuf(gcbuf, row, col, " ", 1, style);
+void drawSolidRect(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, int width, int height, TextStyle* style) {
+    int pos_row, pos_col;
+    getDrawPosition(&pos_row, &pos_col, pos, gcbuf, width+2, height+2);
+    pos_row += offset_row;
+    pos_col += offset_col;
+
+    for (int row=0; row<height; row++) {
+        for (int col=0; col<width; col++) {
+            putGcbuf(gcbuf, pos_row+row, pos_col+col, " ", 1, style);
         }
     }
 }
@@ -944,36 +949,8 @@ void drawTitle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_
     }
 }
 
-
-/*
-dots for awalé board
-
-⠄⠆⠇⠏⠟⠿
-aaaaaaaaa 
-⋅ ⁚ ⸫ ⸬ ⸭
-aaaaaaaaa
-iiiiiiiii
-
-┌─────7─┐ ┌─────7─┐ ┌─────7─┐ ┌─────7─┐ ┌─────7─┐ ┌────28─┐ 
-│· · · ·│ │· · · ·│ │∵ ∵ ∵ ∵│ │∴∵∴∵∴∵∴│ │∷∷∷∷∷∷∷│ │:::::::│ 
-│ · · · │ │ · · · │ │ ∴ ∴ ∴ │ │∵∴∵∴∵∴∵│ │∷∷∷∷ ∷∷│ │:::::::│ 
-└───────┘ └───────┘ └───────┘ └───────┘ └───────┘ └───────┘ 
-═══════════════════════════════════════════════════════════
-┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐ ┌───────┐ 
-│   ·   │ │    ·  │ │   ·   │ │  · ·  │ │· · · ·│ │·······│ 
-│  · ·  │ │  ·    │ │       │ │  · ·  │ │ · · · │ │ ····· │ 
-└─────3─┘ └─────2─┘ └─────1─┘ └─────4─┘ └─────7─┘ └────12─┘ 
-
-::::
-∴∴∴∴∵∵∵∵
-∷∷∷∷
-....
-····
-
-.....
-aaaaa
-⢀⢠⢰⢸⢹⢻⢿⣿⢀⢠⢰⢸⢹⢻⢿⣿
-aaaaaaaaaaaaaaaaaa
-⡀⣀⣄⣆⣇⣧⣷⣿
-
-*/
+void drawPopup(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, TextStyle* style, int width, int height, const char* text) {
+    drawSolidRect(gcbuf, pos, offset_row+1, offset_col+1, width, height, style);
+    drawStrongBox(gcbuf, pos, offset_row, offset_col, style, width, height);
+    drawText(gcbuf, pos, offset_row, offset_col, text);
+}

@@ -166,10 +166,11 @@ int u_strPop(u_string* s);
 
 // DRAW
 void drawDebugColors(GridCharBuffer* gcbuf);
-void drawSolidRect(GridCharBuffer* gcbuf, int start_row, int start_col, int end_row, int end_col, TextStyle* style);
+void drawSolidRect(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, int width, int height, TextStyle* style);
 void drawBox(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, TextStyle* style, int width, int height); 
 void drawStrongBox(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, TextStyle* style, int width, int height); 
 void drawText(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, const char* text); 
 void drawTextWithRawStyle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, const char* text, TextStyle* style); 
 void drawButton(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, const char* text, unsigned char color_code, int selected); 
 void drawTitle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col); 
+void drawPopup(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, TextStyle* style, int width, int height, const char* text); 

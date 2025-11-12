@@ -9,16 +9,28 @@ struct sockaddr_in srv;
 // DISPLAY
 #define GENERAL_DISPLAY_BUF_MAX_LENGTH 512
 char general_display_buf[GENERAL_DISPLAY_BUF_MAX_LENGTH];
+char is_waiting = 0;
+char is_waiting_for_game_response = 0;
+char is_game_request_pending = 0;
+char game_request_selected_field = 0;
 
+#define ACTION_COLOR 2
+#define ACCEPT_COLOR 2
+#define REFUSE_COLOR 13
+#define BACK_COLOR 13
+#define QUIT_COLOR 17
 // GAME
 char user_pseudo_buf[USERNAME_LENGTH];
 u_string user_pseudo = { user_pseudo_buf, 0, 0 };
 
-User user;
-Player player1;
-Player player2;
+User connected_user;
+User opponent_user;
 
 Board current_board;
+
+int users_list_count = 0;
+char users_list_buf[MAX_CLIENTS][USERNAME_LENGTH];
+int32_t users_list_id[MAX_CLIENTS];
 
 // BUTTONS
 int selected_field = 0;
@@ -78,13 +90,42 @@ void frameContent(GridCharBuffer* gcbuf) {
     case MAIN_MENU:
         hideCursor();
         drawTitle(gcbuf, TOP_CENTER, 8, 0);
-        drawButton(gcbuf, CENTER, 0, 0, "Jouer", 2, selected_field==PLAY_BUTTON);
-        drawButton(gcbuf, CENTER, 8, 0, "Retour", 13, selected_field==BACK_BUTTON);
-        drawButton(gcbuf, CENTER, 10, 0, "Quitter", 17, selected_field==QUIT_BUTTON);
-        sprintf(general_display_buf, "Pseudo: !{bi}%s!{r}", user_pseudo.buf);
+        drawButton(gcbuf, CENTER, 2, 0, "Jouer", ACTION_COLOR, selected_field==PLAY_BUTTON);
+        drawButton(gcbuf, CENTER, 8, 0, "Retour", BACK_COLOR, selected_field==BACK_BUTTON);
+        drawButton(gcbuf, CENTER, 10, 0, "Quitter", QUIT_COLOR, selected_field==QUIT_BUTTON);
+        sprintf(general_display_buf, "Pseudo: !{bi}%s - %d!{r}", connected_user.username, connected_user.id);
         drawText(gcbuf, BOTTOM_CENTER, -2, 0, general_display_buf);
         break;
 
+    case USER_LIST_MENU:
+        hideCursor();
+        drawPopup(gcbuf, CENTER, 0, 0, NO_STYLE, gcbuf->cols-10, gcbuf->rows-4, "");
+        char title[100]; sprintf(title, "!{u}%d joueurs connectés!{r}", users_list_count+1);
+        char user[150]; sprintf(user, "!{bi}%s - %d (Vous)!{r}", connected_user.username, connected_user.id);
+        int i = 0;
+        int row = 4;
+        int col = 7;
+        drawText(gcbuf, BOTTOM_CENTER, -3, 0, "!{u}Retour Arr.!{r}: Retour | !{u}Entrée!{r}: Inviter");
+        drawText(gcbuf, TOP_CENTER, 2, 0, title);
+        drawText(gcbuf, TOP_LEFT, row, col, user); row++;
+        TextStyle selected_style = { mkStyleFlags(1, INVERSE), 0, 0 };
+        while (i<users_list_count) {
+            sprintf(user, "%s - %d", users_list_buf[i], users_list_id[i]);
+            drawTextWithRawStyle(gcbuf, TOP_LEFT, row, col, user, (i==selected_field)?&selected_style:NO_STYLE);
+            row++;
+            if (row > gcbuf->rows-3) {
+                row = 3;
+                col += 30;
+            }
+            i++;
+        }
+        break;
+
+    case GAME_START_MENU:
+        hideCursor();
+        drawTitle(gcbuf, TOP_CENTER, 8, 0);
+        break;
+    
     case IN_GAME_MENU:
         hideCursor();
         drawTitle(gcbuf, TOP_CENTER, 8, 0);
@@ -96,21 +137,26 @@ void frameContent(GridCharBuffer* gcbuf) {
     }
 
     if (display_color_test) {
-        drawSolidRect(gcbuf, 0, 0, gcbuf->rows, gcbuf->cols, NO_STYLE);
+        drawSolidRect(gcbuf, TOP_LEFT, 0, 0, gcbuf->rows, gcbuf->cols, NO_STYLE);
         drawDebugColors(gcbuf);
         setCursorPosRelative(gcbuf, BOTTOM_RIGHT, 0, 0);
+    }
+
+    if (is_game_request_pending) {
+        char game_request_msg[150]; sprintf(game_request_msg, "%s - %d", opponent_user.username, opponent_user.id);
+        drawPopup(gcbuf, CENTER, 0, 0, NO_STYLE, 45, 3, "");
+        drawText(gcbuf, CENTER, -1, 0, "Vous avez été invité à jouer contre");
+        drawText(gcbuf, CENTER, 0, 0, game_request_msg);
+        drawButton(gcbuf, CENTER, 1, -10, "Accepter", ACCEPT_COLOR, game_request_selected_field==0);
+        drawButton(gcbuf, CENTER, 1, 11, "Refuser", REFUSE_COLOR, game_request_selected_field==1);
+    }
+
+    if (is_waiting) {
+        drawPopup(gcbuf, CENTER, 0, 0, NO_STYLE, 25, 5, "WAITING...");
     }
 }
 
 void changeMenu(NavigationState new_menu) {
-    switch (navigationState) {
-    case USER_CREATION_MENU:
-        // begin initial messages 
-        MessageUserCreation mes;
-        strcpy(mes.username,"xXAnatouXx");
-        sendMessageUserCreation(sock, mes);
-        break;
-    }
     navigationState = new_menu;
     switch (new_menu) {
     case USER_CREATION_MENU:
@@ -122,6 +168,16 @@ void changeMenu(NavigationState new_menu) {
     case MAIN_MENU:
         selected_field = 0;
         field_count = 3;
+        break;
+
+    case USER_LIST_MENU:
+        selected_field = 0;
+        field_count = users_list_count;
+        break;
+
+    case IN_GAME_MENU:
+        selected_field = 0;
+        field_count = 2;
         break;
 
     default:
@@ -154,68 +210,146 @@ void processEvents(struct pollfd pfds[2]) {
             display_color_test = ~display_color_test;
             break;
         }
-        // CONTEXTUAL KEYBINDS
-        switch (navigationState) {
-        case USER_CREATION_MENU:
-            // Curly braces are not allowed in pseudo (for display reasons)
-            if (isAnyValidChar(c) && c!=123 && c!=125 && user_pseudo.char_len<USERNAME_LENGTH/4) 
-                u_strAppend(&user_pseudo, c);
-            else if (c==KEY_BACKSPACE) u_strPop(&user_pseudo);
-            else if (c==KEY_ENTER) changeMenu(MAIN_MENU);
-            break;
-
-        case MAIN_MENU:
-            if (c==KEY_ARROW_UP && selected_field>0) selected_field--;
-            else if (c==KEY_ARROW_DOWN && selected_field<field_count-1) selected_field++;
-            else if (c==KEY_ENTER) switch (selected_field)
-                {
-                case PLAY_BUTTON:
-                    changeMenu(IN_GAME_MENU);
-                    break;
-                case BACK_BUTTON:
-                    changeMenu(USER_CREATION_MENU);
-                    break;
-                case QUIT_BUTTON:
-                    terminalClearScreen();
-                    exit(0);
-                    break;
-                
-                default:
-                    die("Selected field is invalid");
-                    break;
+        if (!is_waiting && !is_waiting_for_game_response) {
+            // CONTEXTUAL KEYBINDS
+            switch (navigationState) {
+            case USER_CREATION_MENU:
+                // Curly braces are not allowed in pseudo (for display reasons)
+                if (isAnyValidChar(c) && c!=123 && c!=125 && user_pseudo.char_len<USERNAME_LENGTH/4) 
+                    u_strAppend(&user_pseudo, c);
+                else if (c==KEY_BACKSPACE) u_strPop(&user_pseudo);
+                else if (c==KEY_ENTER) {
+                    MessageUserCreation mes;
+                    strcpy(mes.username,user_pseudo.buf);
+                    sendMessageUserCreation(sock, mes);
+                    is_waiting = 1;
+                    changeMenu(MAIN_MENU);
                 }
-            break;
-        
-        case IN_GAME_MENU:
-            if (c==KEY_ARROW_LEFT && selected_awale_house>0) selected_awale_house--;
-            else if (c==KEY_ARROW_RIGHT && selected_awale_house<5) selected_awale_house++;
-            break;
-        
-        default:
-            break;
+                break;
+
+            case MAIN_MENU:
+                if (is_game_request_pending) handle_game_request_popup(c);
+                else if (c==KEY_ARROW_UP && selected_field>0) selected_field--;
+                else if (c==KEY_ARROW_DOWN && selected_field<field_count-1) selected_field++;
+                else if (c==KEY_ENTER) switch (selected_field)
+                    {
+                    case PLAY_BUTTON:
+                        sendMessageGetUserList(sock);
+                        is_waiting = 1;
+                        // Call will block UI, upon server response, the player list will be shown
+                        break;
+                    case BACK_BUTTON:
+                        changeMenu(USER_CREATION_MENU);
+                        break;
+                    case QUIT_BUTTON:
+                        terminalClearScreen();
+                        exit(0);
+                        break;
+                    
+                    default:
+                        die("Selected field is invalid");
+                        break;
+                    }
+                break;
+
+            case USER_LIST_MENU:
+                if (is_game_request_pending) handle_game_request_popup(c);
+                else if (c==KEY_ARROW_UP && selected_field>0) selected_field--;
+                else if (c==KEY_ARROW_DOWN && selected_field<field_count-1) selected_field++;
+                else if (c==KEY_BACKSPACE) changeMenu(MAIN_MENU);
+                else if (c==KEY_ENTER) {
+                    MessageMatchRequest mes = { users_list_id[selected_field] };
+                    sendMessageMatchRequest(sock, mes);
+                    changeMenu(GAME_START_MENU);
+                }
+                break;
+            
+            case IN_GAME_MENU:
+                if (c==KEY_ARROW_LEFT && selected_awale_house>0) selected_awale_house--;
+                else if (c==KEY_ARROW_RIGHT && selected_awale_house<5) selected_awale_house++;
+                break;
+            
+            default:
+                break;
+            }
         }
+
     }
 
     // socket
     if (pfds[1].revents & POLLIN) {
-        char buf[BUF_SIZE];
-        ssize_t r = recv(sock, buf, sizeof(buf)-1, 0);
-        if (r < 0) {
-            close(sock);
-            die("recv");
-        } else if (r == 0) {
-            close(sock);
-            die("Server closed connection.\n");
-        } else {
-            buf[r] = '\0';
-            // if (r<100) {
-            //     sprintf(server_mes, "Recieved: %s", buf);
-            // }
+        int32_t message_type; ssize_t r;
+        r = recieve_from_server(&message_type, sizeof(int32_t));
+    
+        switch (message_type) {
+        case USER_REGISTRATION:
+            r = recieve_from_server(&(connected_user.id), sizeof(int32_t));
+            strcpy(connected_user.username, user_pseudo.buf);
+            is_waiting = 0;
+            changeMenu(MAIN_MENU);
+            break;
+        case SEND_USER_LIST:
+            int32_t user_count;
+            r = recieve_from_server(&user_count, sizeof(int32_t));
+            users_list_count = user_count;
+            if (user_count > 0) {
+                r = recieve_from_server(users_list_buf, sizeof(char)*user_count*USERNAME_LENGTH);
+                r = recieve_from_server(users_list_id, sizeof(int32_t)*user_count);
+            }
+            is_waiting = 0;
+            changeMenu(USER_LIST_MENU);
+            break;
+        case MATCH_PROPOSITION:
+            r = recieve_from_server(&(opponent_user.id), sizeof(int32_t));
+            r = recieve_from_server(&(opponent_user.username), sizeof(char)*USERNAME_LENGTH);
+            is_game_request_pending = 1;
+            game_request_selected_field = 0;
+            break;
+        case MATCH_CANCELLATION:
+            is_game_request_pending = 0;
+            is_waiting = 0;
+            changeMenu(MAIN_MENU);
+            break;
+        case MATCH_RESPONSE:
+            int32_t res;
+            r = recieve_from_server(&res, sizeof(int32_t));
+            if (res) {
+                changeMenu(IN_GAME_MENU);
+            }
+            else {
+                changeMenu(MAIN_MENU);
+            }
+            is_waiting = 0;
+            break;
         }
     }
 
     if (pfds[1].revents & (POLLHUP | POLLERR | POLLNVAL)) {
         die("Socket closed or error.");
+    }
+}
+
+void handle_game_request_popup(int c) {
+    if (c==KEY_ARROW_LEFT) game_request_selected_field = 0;
+    else if (c==KEY_ARROW_RIGHT) game_request_selected_field = 1;
+    else if (c==KEY_ENTER) {
+        sendMessageMatchResponse(sock, !game_request_selected_field);
+        is_game_request_pending = 0;
+        if (!game_request_selected_field)
+            changeMenu(GAME_START_MENU);
+    }
+}
+
+ssize_t recieve_from_server(void* buffer, size_t size) {
+    ssize_t r = recv(sock, buffer, size, 0);
+    if (r < 0) {
+        close(sock);
+        die("recv");
+    } else if (r == 0) {
+        close(sock);
+        die("Server closed connection.\n");
+    } else {
+        return r;
     }
 }
 
@@ -259,7 +393,7 @@ void drawAwaleHouse(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int of
         drawTextWithRawStyle(gcbuf, TOP_LEFT, offset_row+height-1, offset_col+width-2-strlen(buf), buf, style);
 
     int drawn_seeds = 0;
-    drawSolidRect(gcbuf, offset_row+1, offset_col+1, offset_row+height-1, offset_col+width-1, style);
+    drawSolidRect(gcbuf, TOP_LEFT, offset_row+1, offset_col+1, height-1, width-1, style);
     for (int i=0; i<width-2 && drawn_seeds<seed_count; i++, drawn_seeds++)
         drawTextWithRawStyle(gcbuf, TOP_LEFT, offset_row+1, offset_col+1+i, ".", style);
     for (int i=0; i<width-2 && drawn_seeds<seed_count; i++, drawn_seeds++)
