@@ -6,10 +6,12 @@
 #include "game.h"
 
 User* createUser(const char name[], int fd) {
+    static int id_count = 0;
 
     User* user = (User*) calloc(1, sizeof(User));
     strcpy(user->username, name);
     user->fd = fd;
+    user->id = id_count++;
 
     return user;
 }

@@ -34,6 +34,9 @@ int isMessageComplete(int message_type, ssize_t r) {
         case MATCH_RESPONSE:
             expected = sizeof(int) * 2;
             break;
+        case MATCH_CANCELLATION:
+            expected = sizeof(int);
+            break;
         default: 
             printf("error: unknown length for message of type %d.\n", message_type);
             exit(-1);

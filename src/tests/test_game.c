@@ -5,8 +5,8 @@
 #include "../common/game.h"
 
 int main() {
-    User* user1 = createUser("Anatou");
-    User* user2 = createUser("Aurel");
+    User* user1 = createUser("Anatou", 0);
+    User* user2 = createUser("Aurel", 1);
 
     Game * game = initGame(user1, user2);
     simpleGamePrinting(game);
