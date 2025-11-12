@@ -32,13 +32,7 @@ void disconnectUser(int* user_index, int fd, User* users[MAX_CLIENTS], struct po
     }
 
     printf("Client %d with fd %d disconnected.\n", *user_index, fd);
-    close(fd);
-
-    // remove this pfds entry by shifting
-    pfds[*user_index] = pfds[*nfds - 1];
-    pfds[*nfds - 1].fd = -1;
-    pfds[*nfds - 1].events = 0;
-    pfds[*nfds - 1].revents = 0;    
+    close(fd);  
 
     // deallocate user if it exists
     if (users[*user_index] != NULL) {
@@ -60,6 +54,12 @@ void disconnectUser(int* user_index, int fd, User* users[MAX_CLIENTS], struct po
         free(users[*user_index]);
         users[*user_index] = NULL;
     }
+
+    // remove this pfds entry by shifting
+    pfds[*user_index] = pfds[*nfds - 1];
+    pfds[*nfds - 1].fd = -1;
+    pfds[*nfds - 1].events = 0;
+    pfds[*nfds - 1].revents = 0;  
 
     users[*user_index] = users[*nfds-1];
     users[*nfds-1] = NULL;
@@ -254,6 +254,7 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
     switch (message_type) {
 
         case USER_CREATION:
+            printf("USER_CREATION\n");
             if (source_user != NULL){
                 printf("error: User is already registered.\n");
                 return -1;
@@ -276,6 +277,7 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             break;
 
         case GET_USER_LIST:
+            printf("GET_USER_LIST\n");
             if (source_user == NULL) {
                 printf("error: Got a request from an unregistered user.\n");
                 return -1;
@@ -302,6 +304,7 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             break;
 
         case MATCH_REQUEST:
+            printf("MATCH_REQUEST\n");
             // check that user is indeed created
             if (source_user == NULL) {
                 printf("error: Got a request from an unregistered user.\n");
@@ -360,6 +363,7 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             break;
 
         case MATCH_RESPONSE:
+            printf("MATCH_RESPONSE\n");
             // check that user is indeed created
             if (source_user == NULL) {
                 printf("error: Got a request from an unregistered user.\n");
@@ -413,6 +417,7 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             break;
 
         case MATCH_CANCELLATION:
+            printf("MATCH_CANCELLATION\n");
             // check that user is indeed created
             if (source_user == NULL) {
                 printf("error: Got a request from an unregistered user.\n");
@@ -452,6 +457,7 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             break;
 
         case GAME_MOVE:
+            printf("GAME_MOVE\n");
             // check that user is indeed created
             if (source_user == NULL) {
                 printf("error: Got a request from an unregistered user.\n");
