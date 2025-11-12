@@ -38,21 +38,14 @@ void disconnectUser(int* user_index, int fd, User* users[MAX_CLIENTS], struct po
     if (users[*user_index] != NULL) {
         // end active game it there is one
         printf("Removing corresponding user.\n");
-        if (users[*user_index]->active_game != NULL && users[*user_index]->active_game->cancelled_game == false) {
-            users[*user_index]->active_game->cancelled_game = true;
+        if (users[*user_index]->active_game != NULL) {
             printf("Cancelling a game as a result.\n");
-            if (users[*user_index]->active_game->players[BOTTOM] != NULL) {
-                sendMessageMatchCancellation(users[*user_index]->active_game->players[BOTTOM]->fd);
-                users[*user_index]->active_game->players[BOTTOM]->active_game = NULL;
-            }
-            if (users[*user_index]->active_game != NULL && users[*user_index]->active_game->players[TOP] != NULL) {
-                sendMessageMatchCancellation(users[*user_index]->active_game->players[TOP]->fd);
-                users[*user_index]->active_game->players[TOP] = NULL;
-            }
-            
-            free(users[*user_index]->active_game);
+            cancel_game(users[*user_index]->active_game);
         }
-
+        if (users[*user_index]->pending_game != NULL) {
+            printf("Cancelling a game as a result.\n");
+            cancel_invite(users[*user_index]->pending_game);
+        }
         free(users[*user_index]);
         users[*user_index] = NULL;
     }
@@ -71,15 +64,21 @@ void disconnectUser(int* user_index, int fd, User* users[MAX_CLIENTS], struct po
 
 void cancel_invite(Game* game) {
     if (game == NULL) return;
+    game->cancelled_game = true;
     game->players[BOTTOM]->pending_game = NULL;
     game->players[TOP]->pending_game = NULL;
+    sendMessageMatchCancellation(game->players[BOTTOM]->fd);
+    sendMessageMatchCancellation(game->players[TOP]->fd);
     free(game);
 }
 
 void cancel_game(Game* game) {
     if (game == NULL) return;
+    game->cancelled_game = true;
     game->players[BOTTOM]->active_game = NULL;
     game->players[TOP]->active_game = NULL;
+    sendMessageMatchCancellation(game->players[BOTTOM]->fd);
+    sendMessageMatchCancellation(game->players[TOP]->fd);
     free(game);
 }
 
@@ -219,7 +218,6 @@ int main(int argc, char **argv) {
 
                 } else if (r == 0) {
                     // client closed
-                    printf("Client %d with fd %d disconnected.\n", i, fd);
                     disconnectUser(&i, fd, users, pfds, &nfds);               
                     continue;
 
@@ -462,21 +460,11 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             if (source_user->active_game != NULL) {
                 printf("request from user %d (%s) to cancel active game.\n", user_index, source_user->username);
                 // cancel active game
-                source_user->active_game->cancelled_game = true;
-                sendMessageMatchCancellation(source_user->active_game->players[TOP]->fd);
-                sendMessageMatchCancellation(source_user->active_game->players[BOTTOM]->fd);
-                Game* active_game = source_user->active_game;
-                active_game->players[BOTTOM]->active_game = NULL;
-                active_game->players[TOP]->active_game = NULL;
+                cancel_game(source_user->active_game);
             }
             else {
                 printf("request from user %d (%s) to cancel pending game invite.\n", user_index, source_user->username);
-                source_user->pending_game->cancelled_game = true;
-                sendMessageMatchCancellation(source_user->pending_game->players[TOP]->fd);
-                sendMessageMatchCancellation(source_user->pending_game->players[BOTTOM]->fd);
-                Game* pending_game = source_user->pending_game;
-                pending_game->players[BOTTOM]->pending_game = NULL;
-                pending_game->players[TOP]->pending_game = NULL;
+                cancel_invite(source_user->pending_game);
             }
             break;
 

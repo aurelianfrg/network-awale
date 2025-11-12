@@ -20,5 +20,5 @@
 
 int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* users[MAX_CLIENTS], struct pollfd *pfds, int user_fd, int user_index);
 void disconnectUser(int* user_index, int fd, User* users[MAX_CLIENTS], struct pollfd *pfds, int * nfds);
-void cancel_invite(Game* game);
+void cancel_game(Game* game);
 void cancel_invite(Game* game);
