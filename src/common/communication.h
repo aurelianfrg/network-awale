@@ -82,7 +82,7 @@ void sendMessageGameMove(int fd, MessageGameMove message);
 void sendMessageGameIllegalMove(int fd);
 
 void sendMessageGetUserList(int fd);
-void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int user_ids[MAX_CLIENTS], int usernames_count);
+void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int32_t user_ids[MAX_CLIENTS], int32_t usernames_count);
 
 void sendMessageMatchResponse(int fd, int response);
 void sendMessageMatchProposition(int fd, MessageMatchProposition message);

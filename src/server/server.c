@@ -69,7 +69,19 @@ void disconnectUser(int* user_index, int fd, User* users[MAX_CLIENTS], struct po
     --(*user_index); // check the moved one on next iteration
 }
 
+void cancel_invite(Game* game) {
+    if (game == NULL) return;
+    game->players[BOTTOM]->pending_game = NULL;
+    game->players[TOP]->pending_game = NULL;
+    free(game);
+}
 
+void cancel_invite(Game* game) {
+    if (game == NULL) return;
+    game->players[BOTTOM]->active_game = NULL;
+    game->players[TOP]->active_game = NULL;
+    free(game);
+}
 
 int main(int argc, char **argv) {
     if (argc != 2) {
@@ -419,8 +431,11 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             }
             else {
                 // warn initial user that his invite did not result in a game creation
+                printf("Warn invite creator %s that it was rejected.\n", source_user->pending_game->players[BOTTOM]->username);
                 sendMessageMatchResponse(source_user->pending_game->players[BOTTOM]->fd, false);
-                return -1;
+
+                // end pending game
+                
             }
 
             break;
