@@ -199,6 +199,36 @@ int main(int argc, char **argv) {
     }
     else { printf("error: unexpected message %d\n", message_type); }
 
+    // game has started, player 0 makes a move
+    printf("Player 0 makes a move.\n");
+    MessageGameMove move_message;
+    move_message.selected_house = 4;
+    sendMessageGameMove(sock, move_message);
+
+    recv(sock, &message_type, sizeof(int32_t), 0);
+    if (message_type==GAME_UPDATE) {
+        printf("Game update from server received.\n");
+        MessageGameUpdate mes;
+        recv(sock, &mes, sizeof(MessageGameUpdate), 0);
+        simpleSnapshotPrinting(&mes.snapshot);
+    }
+    else { printf("error: unexpected message %d\n", message_type); }
+
+
+    printf("Player 1 makes a move.\n");
+    move_message.selected_house = 8;
+    sendMessageGameMove(sock2, move_message);
+
+    recv(sock, &message_type, sizeof(int32_t), 0);
+    if (message_type==GAME_UPDATE) {
+        printf("Game update from server received.\n");
+        MessageGameUpdate mes;
+        recv(sock, &mes, sizeof(MessageGameUpdate), 0);
+        simpleSnapshotPrinting(&mes.snapshot);
+    }
+    else { printf("error: unexpected message %d\n", message_type); }
+
+
 
     getchar();
     return 0;
