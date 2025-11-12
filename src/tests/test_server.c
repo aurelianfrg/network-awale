@@ -66,7 +66,7 @@ int main(int argc, char **argv) {
     sendMessageUserCreation(sock, user_creation_msg);
 
     // get response from server
-    int message_type;
+    int32_t message_type;
     recv(sock, &message_type, sizeof(int), 0);
     if (message_type == USER_REGISTRATION) {
         MessageUserRegistration msg;
