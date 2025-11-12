@@ -168,7 +168,7 @@ void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int32_t 
     // send number of users, then usernames, then ids
     int32_t message_type = SEND_USER_LIST;
 
-    ssize_t message_length = sizeof(message_type) * 2 + usernames_count*USERNAME_LENGTH*sizeof(char) + sizeof(usernames_count)*MAX_CLIENTS;
+    ssize_t message_length = sizeof(message_type) * 2 + usernames_count*USERNAME_LENGTH*sizeof(char) + sizeof(usernames_count)*usernames_count;
     char* buffer = calloc(1, message_length);
     memcpy(buffer, &message_type, sizeof(message_type));
     memcpy(buffer+sizeof(message_type), &usernames_count, sizeof(usernames_count));
@@ -181,7 +181,7 @@ void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int32_t 
 void sendMessageMatchResponse(int fd, int response) {
     typedef struct MessageWithHeader {
         int32_t message_type;
-        int response;
+        int32_t response;
     } MessageWithHeader;
     MessageWithHeader message_with_header;
 

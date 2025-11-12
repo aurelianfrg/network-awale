@@ -313,13 +313,21 @@ void processEvents(struct pollfd pfds[2]) {
         case MATCH_RESPONSE:
             int32_t res;
             r = recieve_from_server(&res, sizeof(int32_t));
-            if (res) {
+            if (res)
                 changeMenu(IN_GAME_MENU);
-            }
-            else {
+            else
                 changeMenu(MAIN_MENU);
-            }
             is_waiting = 0;
+            break;
+        case GAME_START:
+            changeMenu(IN_GAME_MENU);
+            dieNoError("OKKKK");
+            
+            break;
+        default:
+            char buf[100]; sprintf(buf, "UNKWOWN MESSAGE: %d", message_type);
+            dieNoError(buf);
+            
             break;
         }
     }
