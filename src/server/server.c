@@ -438,7 +438,7 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
                 sendMessageMatchResponse(source_user->pending_game->players[BOTTOM]->fd, false);
 
                 // end pending game
-                
+                cancel_invite(source_user->pending_game);
             }
 
             break;
