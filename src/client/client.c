@@ -35,9 +35,12 @@ int32_t users_list_id[MAX_CLIENTS];
 // BUTTONS
 int selected_field = 0;
 int field_count = 1;
-#define PLAY_BUTTON 0
-#define BACK_BUTTON 1
-#define QUIT_BUTTON 2
+#define MM_PLAY_BUTTON 0
+#define MM_BACK_BUTTON 1
+#define MM_QUIT_BUTTON 2
+
+#define IG_AWALE_HOUSE 0
+#define IG_BACK_BUTTON 1
 
 int selected_awale_house = 0;
 
@@ -90,10 +93,11 @@ void frameContent(GridCharBuffer* gcbuf) {
     case MAIN_MENU:
         hideCursor();
         drawTitle(gcbuf, TOP_CENTER, 8, 0);
-        drawButton(gcbuf, CENTER, 2, 0, "Jouer", ACTION_COLOR, selected_field==PLAY_BUTTON);
-        drawButton(gcbuf, CENTER, 8, 0, "Retour", BACK_COLOR, selected_field==BACK_BUTTON);
-        drawButton(gcbuf, CENTER, 10, 0, "Quitter", QUIT_COLOR, selected_field==QUIT_BUTTON);
-        sprintf(general_display_buf, "Pseudo: !{bi}%s - %d!{r}", connected_user.username, connected_user.id);
+
+        drawButton(gcbuf, CENTER, 0, 0, "Jouer", 2, selected_field==MM_PLAY_BUTTON);
+        drawButton(gcbuf, CENTER, 8, 0, "Retour", 13, selected_field==MM_BACK_BUTTON);
+        drawButton(gcbuf, CENTER, 10, 0, "Quitter", 17, selected_field==MM_QUIT_BUTTON);
+        sprintf(general_display_buf, "Pseudo: !{bi}%s!{r}", connected_user.username);
         drawText(gcbuf, BOTTOM_CENTER, -2, 0, general_display_buf);
         break;
 
@@ -129,7 +133,12 @@ void frameContent(GridCharBuffer* gcbuf) {
     case IN_GAME_MENU:
         hideCursor();
         drawTitle(gcbuf, TOP_CENTER, 8, 0);
-        drawAwaleBoard(gcbuf, CENTER, 0, 0);
+        TextStyle top_style = { mkStyleFlags(1, FAINT), 0, 0 };
+        TextStyle bot_style = { 0, 0, 0 };
+        drawAwaleBoard(gcbuf, CENTER, 2, 0, &top_style, (opponent_user.id==connected_user.id)?&bot_style:&top_style);
+        drawText(gcbuf, CENTER, -1, 0, opponent_user.username);
+        drawText(gcbuf, CENTER, 9, 0, opponent_user.username);
+        drawButton(gcbuf, BOTTOM_CENTER, -2, 0, "Retour", 13, selected_field==IG_BACK_BUTTON);
         break;
     
     default:
@@ -158,6 +167,7 @@ void frameContent(GridCharBuffer* gcbuf) {
 
 void changeMenu(NavigationState new_menu) {
     navigationState = new_menu;
+    // Entering state
     switch (new_menu) {
     case USER_CREATION_MENU:
         user_pseudo.buf[0] = '\0';
@@ -179,7 +189,6 @@ void changeMenu(NavigationState new_menu) {
         selected_field = 0;
         field_count = 2;
         break;
-
     default:
         break;
     }
@@ -233,24 +242,23 @@ void processEvents(struct pollfd pfds[2]) {
                 else if (c==KEY_ARROW_DOWN && selected_field<field_count-1) selected_field++;
                 else if (c==KEY_ENTER) switch (selected_field)
                     {
-                    case PLAY_BUTTON:
+                    case MM_PLAY_BUTTON:
                         sendMessageGetUserList(sock);
                         is_waiting = 1;
-                        // Call will block UI, upon server response, the player list will be shown
                         break;
-                    case BACK_BUTTON:
+                    case MM_BACK_BUTTON:
                         changeMenu(USER_CREATION_MENU);
                         break;
-                    case QUIT_BUTTON:
+                    case MM_QUIT_BUTTON:
                         terminalClearScreen();
                         exit(0);
                         break;
                     
                     default:
-                        die("Selected field is invalid");
+                        die("Main menu: Selected field is invalid");
                         break;
                     }
-                break;
+                    break;
 
             case USER_LIST_MENU:
                 if (is_game_request_pending) handle_game_request_popup(c);
@@ -265,15 +273,17 @@ void processEvents(struct pollfd pfds[2]) {
                 break;
             
             case IN_GAME_MENU:
-                if (c==KEY_ARROW_LEFT && selected_awale_house>0) selected_awale_house--;
-                else if (c==KEY_ARROW_RIGHT && selected_awale_house<5) selected_awale_house++;
+                if (c==KEY_ARROW_LEFT && selected_field==IG_AWALE_HOUSE && selected_awale_house>0) selected_awale_house--;
+                else if (c==KEY_ARROW_RIGHT && selected_field==IG_AWALE_HOUSE && selected_awale_house<5) selected_awale_house++;
+                else if (c==KEY_ARROW_UP && selected_field>0) selected_field--;
+                else if (c==KEY_ARROW_DOWN && selected_field<field_count-1) selected_field++;
+                else if (c==KEY_ENTER && selected_field==IG_BACK_BUTTON) changeMenu(MAIN_MENU);
                 break;
             
             default:
                 break;
             }
         }
-
     }
 
     // socket
@@ -421,7 +431,7 @@ void drawAwaleHouse(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int of
 
 }
 
-void drawAwaleBoard(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col) {
+void drawAwaleBoard(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, TextStyle* top_style, TextStyle* bot_style) {
     int board_width = AWALE_HOUSE_WIDTH*6 + 5;
     int board_height = AWALE_HOUSE_HEIGHT*2 + 1;
 
@@ -430,17 +440,16 @@ void drawAwaleBoard(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int of
     pos_row += offset_row;
     pos_col += offset_col;
 
-    TextStyle ennemy_style = { mkStyleFlags(1, FAINT), 0, 0 };
-    TextStyle player_style = { 0, 0, 0 };
-    TextStyle player_style_selected = { player_style.flags | mkStyleFlags(1, INVERSE), player_style.fg_color_code, player_style.bg_color_code };
+    
+    TextStyle bot_style_selected = { bot_style->flags | mkStyleFlags(1, INVERSE), bot_style->fg_color_code, bot_style->bg_color_code };
     TextStyle center_style = { mkStyleFlags(1, FAINT), 0, 0 };
     for (int i=0; i<6; i++)
-        drawAwaleHouse(gcbuf, TOP_LEFT, pos_row+offset_row, pos_col+(AWALE_HOUSE_WIDTH+1)*i+offset_col, &ennemy_style, 4, TOP);
+        drawAwaleHouse(gcbuf, TOP_LEFT, pos_row+offset_row, pos_col+(AWALE_HOUSE_WIDTH+1)*i+offset_col, top_style, 4, TOP);
     for (int i=0; i<6; i++) {
-        if (selected_awale_house == i)
-            drawAwaleHouse(gcbuf, TOP_LEFT, pos_row+board_height-AWALE_HOUSE_HEIGHT+offset_row, pos_col+(AWALE_HOUSE_WIDTH+1)*i+offset_col, &player_style_selected, 4, BOTTOM);
+        if (selected_awale_house == i && selected_field==IG_AWALE_HOUSE && opponent_user.id == connected_user.id)
+            drawAwaleHouse(gcbuf, TOP_LEFT, pos_row+board_height-AWALE_HOUSE_HEIGHT+offset_row, pos_col+(AWALE_HOUSE_WIDTH+1)*i+offset_col, &bot_style_selected, 4, BOTTOM);
         else
-            drawAwaleHouse(gcbuf, TOP_LEFT, pos_row+board_height-AWALE_HOUSE_HEIGHT+offset_row, pos_col+(AWALE_HOUSE_WIDTH+1)*i+offset_col, &player_style, 4, BOTTOM);
+            drawAwaleHouse(gcbuf, TOP_LEFT, pos_row+board_height-AWALE_HOUSE_HEIGHT+offset_row, pos_col+(AWALE_HOUSE_WIDTH+1)*i+offset_col, bot_style, 4, BOTTOM);
     }
     for (int i=0; i<board_width; i++)
         drawTextWithRawStyle(gcbuf, TOP_LEFT, pos_row+board_height/2+offset_row, pos_col+i, "═", &center_style);
