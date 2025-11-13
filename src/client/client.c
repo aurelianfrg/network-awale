@@ -25,8 +25,16 @@ char is_game_request_pending = 0;
 char is_chat_open = 0;
 
 // USER CREATION
-char user_pseudo_buf[USERNAME_LENGTH];
-u_string user_pseudo = { user_pseudo_buf, 0, 0 };
+char _user_pseudo_buf[USERNAME_LENGTH];
+u_string user_pseudo = { _user_pseudo_buf, 0, 0 };
+
+// CHAT
+#define CHAT_HISTORY_LENGTH 100
+MessageChat chat_history[CHAT_HISTORY_LENGTH];
+int chat_message_count = 0;
+int unread_chat_messages = 0;
+char _chat_message_buf[MAX_CHAT_MESSAGE_LENTGH];
+u_string chat_message = { _chat_message_buf, 0, 0 };
 
 // GAME
 Side connected_user_side = 0;
@@ -54,8 +62,6 @@ int field_count = 1;
 #define IG_BACK_BUTTON 1
 
 int selected_awale_house = 0;
-
-//char server_mes[100] = "Waiting for server message...\0";
 
 int display_color_test=0;
 
@@ -108,7 +114,7 @@ void frameContent(GridCharBuffer* gcbuf) {
         drawButton(gcbuf, CENTER, 2, 0, "Jouer", 2, selected_field==MM_PLAY_BUTTON);
         drawButton(gcbuf, CENTER, 8, 0, "Retour", 13, selected_field==MM_BACK_BUTTON);
         drawButton(gcbuf, CENTER, 10, 0, "Quitter", 17, selected_field==MM_QUIT_BUTTON);
-        sprintf(general_display_buf, "Pseudo: !{bi}%s - %d!{r}", connected_user.username, connected_user.id);
+        sprintf(general_display_buf, "Pseudo: !{bi}%s #%d!{r}", connected_user.username, connected_user.id);
         drawText(gcbuf, BOTTOM_CENTER, -2, 0, general_display_buf);
         break;
 
@@ -116,7 +122,7 @@ void frameContent(GridCharBuffer* gcbuf) {
         hideCursor();
         drawPopup(gcbuf, CENTER, 0, 0, NO_STYLE, gcbuf->cols-10, gcbuf->rows-4, "");
         char title[100]; sprintf(title, "!{u}%d joueurs connectés!{r}", users_list_count+1);
-        char user[150]; sprintf(user, "!{bi}%s - %d (Vous)!{r}", connected_user.username, connected_user.id);
+        char user[150]; sprintf(user, "!{bi}%s #%d (Vous)!{r}", connected_user.username, connected_user.id);
         int i = 0;
         int row = 4;
         int col = 7;
@@ -127,7 +133,7 @@ void frameContent(GridCharBuffer* gcbuf) {
         while (i<users_list_count) {
             users_list_buf[i][99] = '\0';
             char user_pseudo[100]; strcpy(user_pseudo, users_list_buf[i]);
-            sprintf(user, "%s - %d", user_pseudo, users_list_id[i]);
+            sprintf(user, "%s #%d", user_pseudo, users_list_id[i]);
             drawTextWithRawStyle(gcbuf, TOP_LEFT, row, col, user, (i==selected_field)?&selected_style:NO_STYLE);
             row++;
             if (row > gcbuf->rows-3) {
@@ -148,15 +154,84 @@ void frameContent(GridCharBuffer* gcbuf) {
             drawText(gcbuf, TOP_CENTER, 1, 0, "!{vF004}Tour de l'adversaire");
 
         drawAwaleBoard(gcbuf, CENTER, 0, 0, &top_style, &bot_style);
-        sprintf(general_display_buf, "Opposant: !{u}%s-%d!{r}", opponent_user.username, opponent_user.id);
+        sprintf(general_display_buf, "Opposant: !{u}%s #%d!{r}", opponent_user.username, opponent_user.id);
         drawText(gcbuf, CENTER, -8, 0, general_display_buf);
         sprintf(general_display_buf, "%d points", current_game_snapshot.points[opponent_user_side]);
         drawText(gcbuf, CENTER, -7, 0, general_display_buf);
-        sprintf(general_display_buf, "Vous: !{u}%s-%d!{r}", connected_user.username, connected_user.id);
+        sprintf(general_display_buf, "Vous: !{u}%s #%d!{r}", connected_user.username, connected_user.id);
         drawText(gcbuf, CENTER, 7, 0, general_display_buf);
         sprintf(general_display_buf, "%d points", current_game_snapshot.points[connected_user_side]);
         drawText(gcbuf, CENTER, 8, 0, general_display_buf);
         drawButton(gcbuf, BOTTOM_CENTER, -2, 0, "Retour", 13, selected_field==IG_BACK_BUTTON);
+
+        if (is_chat_open) {
+            int chat_width = gcbuf->cols-15;
+            int chat_height = gcbuf->rows-6;
+            int max_chat_rows_displayed = (chat_height-4);
+            drawPopup(gcbuf, CENTER, 0, 0, NO_STYLE, chat_width, chat_height, "");
+            drawText(gcbuf, TOP_CENTER, 3, 0, "!{bi}─────── CHAT ───────");
+            drawBox(gcbuf, BOTTOM_CENTER, (chat_height-gcbuf->rows)/2, 0, NO_STYLE, chat_width-2, 1);
+            drawText(gcbuf, BOTTOM_LEFT, (chat_height-gcbuf->rows)/2-2, 9, ">");
+            if (chat_message.char_len == 0) {
+                drawText(gcbuf, BOTTOM_LEFT, (chat_height-gcbuf->rows)/2-2, 10, "!{f}écrire un message dans le chat...");
+            }
+            if (chat_message.char_len > chat_width-4) {
+                drawTextWithRawStyle(gcbuf, BOTTOM_LEFT, (chat_height-gcbuf->rows)/2-2, 10, chat_message.buf+chat_message.char_len-chat_width+4, NO_STYLE);
+                setCursorPos(gcbuf->rows-5, 10+chat_width-4);
+            }
+            else {
+                drawTextWithRawStyle(gcbuf, BOTTOM_LEFT, (chat_height-gcbuf->rows)/2-2, 10, chat_message.buf, NO_STYLE);
+                setCursorPos(gcbuf->rows-5, 10+chat_message.char_len);
+            }
+            showCursor();
+
+            drawText(gcbuf, BOTTOM_LEFT, (chat_height-gcbuf->rows)/2, 10, "!{u}Echap.!{r}: Retour");
+            drawText(gcbuf, BOTTOM_RIGHT, (chat_height-gcbuf->rows)/2, -10, "!{u}Entrée!{r}: Envoyer");
+
+            if (chat_message_count) {
+                int printed_chats=0;
+                int printed_rows=0;
+                int row = gcbuf->rows-((gcbuf->rows-chat_height)/2+4);
+                int col = (gcbuf->cols-chat_width)/2+2;
+                while (printed_chats<chat_message_count && printed_rows<max_chat_rows_displayed) {
+                    int chat_id = (chat_message_count-printed_chats-1)%100;
+                    int chat_line_width = chat_width-3;
+                    // MESSAGE
+                    int lines_to_print = u_strlen(chat_history[chat_id].message)/chat_line_width +1;
+                    int offset = 0;
+                    row -= lines_to_print-1;
+                    for (int line=0; line<lines_to_print; line++) {
+                        int line_char_count = 0;
+                        int line_offset = 0;
+                        char line_str[chat_width*4]; 
+                        unsigned char c = (unsigned char)chat_history[chat_id].message[offset];
+                        while (line_char_count<chat_line_width && c!='\0') {
+                            line_char_count++;
+                            line_offset += u_charlen(&c);
+                            offset += u_charlen(&c);
+                            c = (unsigned char)chat_history[chat_id].message[offset];
+                        }
+                        strncpy(line_str, &(chat_history[chat_id].message[offset-line_offset]), line_offset+1);
+                        drawTextWithRawStyle(gcbuf, TOP_LEFT, row, col, line_str, NO_STYLE);
+                        row++; printed_rows++;
+                    }
+                    row -= lines_to_print+1;
+
+                    // USERNAME
+                    TextStyle style = { mkStyleFlags(3, FG_COLOR, ITALIC, BOLD), chat_history[chat_id].user_id%19+1, chat_history[chat_id].user_id%19+1 };
+                    if (connected_user.id == chat_history[chat_id].user_id)
+                        sprintf(general_display_buf, "(Vous) %s #%d", chat_history[chat_id].username, chat_history[chat_id].user_id);
+                    else
+                        sprintf(general_display_buf, "%s #%d", chat_history[chat_id].username, chat_history[chat_id].user_id);
+                    drawTextWithRawStyle(gcbuf, TOP_LEFT, row, col, general_display_buf, &style);
+                    row--; printed_rows++;
+                    printed_chats++;
+                }
+            }
+            else {
+                drawText(gcbuf, CENTER, 0, 0, "Aucun message dans le chat");
+            }
+        }
         break;
 
     case GAME_END_MENU:
@@ -168,17 +243,16 @@ void frameContent(GridCharBuffer* gcbuf) {
             drawPopup(gcbuf, CENTER, -10, 0, NO_STYLE, 13, 1, "Défaite :(");
 
         // Points
-        sprintf(general_display_buf, "Opposant: !{u}%s-%d!{r}", opponent_user.username, opponent_user.id);
+        sprintf(general_display_buf, "Opposant: !{u}%s #%d!{r}", opponent_user.username, opponent_user.id);
         drawText(gcbuf, CENTER, -6, 20, general_display_buf);
         sprintf(general_display_buf, "%d points", current_game_snapshot.points[opponent_user_side]);
         drawText(gcbuf, CENTER, -5, 20, general_display_buf);
-        sprintf(general_display_buf, "Vous: !{u}%s-%d!{r}", connected_user.username, connected_user.id);
+        sprintf(general_display_buf, "Vous: !{u}%s #%d!{r}", connected_user.username, connected_user.id);
         drawText(gcbuf, CENTER, -6, -20, general_display_buf);
         sprintf(general_display_buf, "%d points", current_game_snapshot.points[connected_user_side]);
         drawText(gcbuf, CENTER, -5, -20, general_display_buf);
         drawAwaleBoard(gcbuf, CENTER, 4, 0, &faint_style, &faint_style);
         drawButton(gcbuf, BOTTOM_CENTER, -3, 0, "Retourner à l'accueil", 13, 1);
-
         break;
     
     default:
@@ -192,7 +266,7 @@ void frameContent(GridCharBuffer* gcbuf) {
     }
 
     if (is_game_request_pending) {
-        sprintf(general_display_buf, "%s - %d", opponent_user.username, opponent_user.id);
+        sprintf(general_display_buf, "%s #%d", opponent_user.username, opponent_user.id);
         drawPopup(gcbuf, CENTER, 0, 0, NO_STYLE, 45, 3, "");
         drawText(gcbuf, CENTER, -1, 0, "Vous avez été invité à jouer contre");
         drawText(gcbuf, CENTER, 0, 0, general_display_buf);
@@ -201,7 +275,7 @@ void frameContent(GridCharBuffer* gcbuf) {
     }
 
     if (is_waiting_for_game_response) {
-        sprintf(general_display_buf, "%s - %d", opponent_user.username, opponent_user.id);
+        sprintf(general_display_buf, "%s #%d", opponent_user.username, opponent_user.id);
         drawPopup(gcbuf, CENTER, 0, 0, NO_STYLE, 45, 3, "");
         drawText(gcbuf, CENTER, -1, 0, "En attente d'une réponse de");
         drawText(gcbuf, CENTER, 0, 0, general_display_buf);
@@ -226,16 +300,19 @@ void changeMenu(NavigationState new_menu) {
         user_pseudo.buf[0] = '\0';
         user_pseudo.byte_len = 0;
         user_pseudo.char_len = 0;
+        chat_message_count = 0;
         break;
 
     case MAIN_MENU:
         selected_field = 0;
         field_count = 3;
+        chat_message_count = 0;
         break;
 
     case USER_LIST_MENU:
         selected_field = 0;
         field_count = users_list_count;
+        chat_message_count = 0;
         break;
 
     case IN_GAME_MENU:
@@ -333,7 +410,28 @@ void processEvents(struct pollfd pfds[2]) {
                 break;
             
             case IN_GAME_MENU:
-                if (c==KEY_ARROW_LEFT && selected_field==IG_AWALE_HOUSE && selected_awale_house>0) selected_awale_house--;
+                if (is_chat_open) {
+                    if (c==KEY_ESCAPE) is_chat_open = 0;
+                    else if (isAnyValidChar(c) && chat_message.char_len<MAX_CHAT_MESSAGE_LENTGH/4) 
+                        u_strAppend(&chat_message, c);
+                    else if (c==KEY_BACKSPACE) u_strPop(&chat_message);
+                    else if (c==KEY_ENTER) {
+                        MessageChat mes;
+                        strcpy(mes.message, chat_message.buf);
+                        strcpy(mes.username, connected_user.username);
+                        mes.user_id = connected_user.id;
+                        sendMessageChat(sock, mes);
+                        strcpy(chat_history[chat_message_count%100].message, chat_message.buf);
+                        strcpy(chat_history[chat_message_count%100].username, connected_user.username);
+                        chat_history[chat_message_count%100].user_id = connected_user.id;
+                        chat_message_count++;
+                        chat_message.byte_len=0;
+                        chat_message.char_len=0;
+                        chat_message.buf[0] = '\0';
+                    }
+                }
+                else if (c=='c') is_chat_open = 1;
+                else if (c==KEY_ARROW_LEFT && selected_field==IG_AWALE_HOUSE && selected_awale_house>0) selected_awale_house--;
                 else if (c==KEY_ARROW_RIGHT && selected_field==IG_AWALE_HOUSE && selected_awale_house<5) selected_awale_house++;
                 else if (c==KEY_ARROW_UP && selected_field>0) selected_field--;
                 else if (c==KEY_ARROW_DOWN && selected_field<field_count-1) selected_field++;
@@ -354,6 +452,7 @@ void processEvents(struct pollfd pfds[2]) {
 
             case GAME_END_MENU:
                 if (c==KEY_ENTER) changeMenu(MAIN_MENU);
+                break;
             
             default:
                 break;
@@ -397,14 +496,19 @@ void processEvents(struct pollfd pfds[2]) {
             break;
 
         case MATCH_CANCELLATION:
-            is_game_request_pending = 0;
-            is_waiting_for_game_response = 0;
-            is_waiting = 0;
-            if (navigationState == IN_GAME_MENU || is_waiting_for_game_response) {
+            if (navigationState == IN_GAME_MENU || navigationState == GAME_END_MENU || is_waiting_for_game_response) {
                 is_notified = 1;
                 strcpy(notification_message, "Partie annulée");
             }
-            changeMenu(MAIN_MENU);
+            else if (is_game_request_pending) {
+                is_notified = 1;
+                strcpy(notification_message, "Demande annulée");
+            }
+            if (navigationState == IN_GAME_MENU || navigationState == GAME_END_MENU) changeMenu(MAIN_MENU);
+            is_game_request_pending = 0;
+            is_waiting_for_game_response = 0;
+            is_waiting = 0;
+            is_chat_open = 0;
             break;
 
         case MATCH_RESPONSE:
@@ -414,6 +518,7 @@ void processEvents(struct pollfd pfds[2]) {
             }
             else {
                 changeMenu(MAIN_MENU);
+                is_chat_open = 0;
                 is_notified = 1;
                 strcpy(notification_message, "Partie refusée");
             }
@@ -446,6 +551,15 @@ void processEvents(struct pollfd pfds[2]) {
             is_notified = 1;
             current_game_snapshot.turn = !current_game_snapshot.turn;
             break;
+
+        case CHAT_MESSAGE:
+            recieve_from_server(&(chat_history[chat_message_count%100].message), sizeof(char)*MAX_CHAT_MESSAGE_LENTGH);
+            recieve_from_server(&(chat_history[chat_message_count%100].username), sizeof(char)*USERNAME_LENGTH);
+            recieve_from_server(&(chat_history[chat_message_count%100].user_id), sizeof(int32_t));
+            chat_message_count++;
+            unread_chat_messages++;
+            break;
+            
 
         default:
             sprintf(general_display_buf, "UNKWOWN MESSAGE: %d", message_type);

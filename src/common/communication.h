@@ -67,6 +67,13 @@ typedef struct MessageMatchProposition {
     char opponent_username[USERNAME_LENGTH];
 } MessageMatchProposition;
 
+typedef struct MessageChat {
+    char message[MAX_CHAT_MESSAGE_LENTGH];
+    char username[USERNAME_LENGTH];
+    int32_t user_id;
+} MessageChat;
+
+
 
 
 int isMessageComplete(int32_t message_type, ssize_t r);
@@ -91,4 +98,4 @@ void sendMessageMatchResponse(int fd, int response);
 void sendMessageMatchProposition(int fd, MessageMatchProposition message);
 void sendMessageMatchCancellation(int fd);
 
-void sendMessageChat(int fd, const char content[MAX_CHAT_MESSAGE_LENTGH]);
+void sendMessageChat(int fd, MessageChat message);

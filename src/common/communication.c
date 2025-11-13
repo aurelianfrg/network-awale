@@ -38,7 +38,7 @@ int isMessageComplete(int32_t message_type, ssize_t r) {
             expected = sizeof(int32_t);
             break;
         case CHAT_MESSAGE:
-            expected = sizeof(int32_t) + MAX_CHAT_MESSAGE_LENTGH;
+            expected = sizeof(int32_t) + sizeof(MessageChat);
             break;
         default: 
             printf("error: unknown length for message of type %d.\n", message_type);
@@ -216,16 +216,16 @@ void sendMessageGameIllegalMove(int fd) {
     send(fd, &msg, sizeof(msg), 0);
 }
 
-void sendMessageChat(int fd, const char content[MAX_CHAT_MESSAGE_LENTGH]) {
+void sendMessageChat(int fd, MessageChat message) {
 
     typedef struct MessageWithHeader {
         int32_t message_type;
-        char message[MAX_CHAT_MESSAGE_LENTGH];
+        MessageChat message;
     } MessageWithHeader;
 
     MessageWithHeader message_with_header;
     message_with_header.message_type = CHAT_MESSAGE;
-    strcpy(message_with_header.message, content);
+    message_with_header.message = message;
     send(fd, &message_with_header, sizeof(MessageWithHeader), 0);
 }
 

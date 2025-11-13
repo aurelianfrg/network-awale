@@ -14,7 +14,7 @@ void handleResize(int sig) {
 }
 
 void die(const char *s) {
-    terminalClearScreen();
+    // terminalClearScreen();
     perror(s);
     printf("\r\n");
     exit(1);
@@ -65,6 +65,8 @@ void enableRawMode() {
     raw.c_oflag &= ~(OPOST);
     raw.c_cflag |= (CS8);
     raw.c_lflag &= ~(ECHO | IEXTEN | ICANON | ISIG);
+    raw.c_cc[VMIN] = 0;
+    raw.c_cc[VTIME] = 1;
 
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
 }

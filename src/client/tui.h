@@ -19,6 +19,7 @@
 // ===================================
 
 typedef enum TerminalKeyCode {
+    KEY_ESCAPE = 27,
     KEY_BACKSPACE = 127,
     KEY_ENTER = 13,
     KEY_ARROW_LEFT = 1000000,
