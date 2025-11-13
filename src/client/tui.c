@@ -6,8 +6,8 @@
 volatile sig_atomic_t resize_pending = 0;
 TerminalConfig term_config;
 
-const TextStyle _NO_STYLE = {0,0,0};
-const TextStyle* NO_STYLE = &_NO_STYLE;
+TextStyle _NO_STYLE = {0,0,0};
+TextStyle* NO_STYLE = &_NO_STYLE;
 
 void handleResize(int sig) {
     resize_pending = 1;
@@ -16,14 +16,15 @@ void handleResize(int sig) {
 void die(const char *s) {
     terminalClearScreen();
     perror(s);
-    write(STDOUT_FILENO, "\r\n", 2);
+    printf("\r\n");
     exit(1);
 }
 
 void dieNoError(const char *s) {
     // terminalClearScreen();
-    write(STDOUT_FILENO, s, strlen(s));
-    write(STDOUT_FILENO, "\r\n", 2);
+    if (write(STDOUT_FILENO, s, strlen(s)))
+        printf("Error while printing error message");
+    printf("\r\n");
     exit(1);
 }
 
@@ -35,7 +36,8 @@ TerminalConfig* initTerminal() {
 
 void closeTerminal() {
     disableRawMode();
-    write(STDOUT_FILENO, "\x1b[?25h\x1b[H\x1b[0m", 13);
+    if (write(STDOUT_FILENO, "\x1b[?25h\x1b[H\x1b[0m", 13)<=0)
+        printf("Error while reseting terminal functionalities");
 }
 
 void disableRawMode() {
@@ -133,7 +135,8 @@ int terminalReadKey() {
 
 void terminalClearScreen() {
     // Clear formatting, clear screen, move cursor to top-left
-    write(STDOUT_FILENO, "\x1b[0m\x1b[2J\x1b[H", 11);
+    if (write(STDOUT_FILENO, "\x1b[0m\x1b[2J\x1b[H", 11) <= 0) 
+        die("Write error while clearing the terminal");
 }
 
 int getCursorPosition(int *rows, int *cols) {
@@ -191,6 +194,7 @@ void initApplication() {
 // ========= INPUT ==========
 
 void processKeypress(int c) {
+    int times;
     switch (c) {
         case KEY_ARROW_UP:
         case KEY_ARROW_LEFT:
@@ -204,7 +208,7 @@ void processKeypress(int c) {
             break;
         case KEY_PAGE_UP:
         case KEY_PAGE_DOWN:
-            int times = app_state.term_config.screenrows;
+            times = app_state.term_config.screenrows;
             while (times--)
                 editorMoveCursor(c == KEY_PAGE_UP ? KEY_ARROW_UP : KEY_ARROW_DOWN);
             break;
@@ -266,7 +270,7 @@ void drawFrame() {
     sigset_t x,old;
     sigemptyset(&x);
     sigaddset(&x, SIGWINCH);
-    int ret = sigprocmask(SIG_BLOCK, &x, &old);
+    sigprocmask(SIG_BLOCK, &x, &old);
     // exit(1);
     flushFrame(gcbuf);
     freeGcbuf(gcbuf);
@@ -395,7 +399,6 @@ void flushFrame(GridCharBuffer* gcbuf) {
     snprintf(BUFFER_END_OVERHEAD_VAL, BUFFER_END_OVERHEAD_COST, "\x1b[?25%c\x1b[%d;%dH", (app_state.cursor_visibility)?'h':'l', app_state.cursor_y + 1, app_state.cursor_x + 1); // Show cursor and move it
     BUFFER_END_OVERHEAD_COST = strlen(BUFFER_END_OVERHEAD_VAL);
     strcpy(ROW_OVERHEAD_VAL, "\x1b[K\r\n"); // Clear end of line and goto next line
-    int gcbuf_size = 0;
     int char_buf_byte_size = 
         getGcbufSize(gcbuf) + 
         ROW_OVERHEAD_COST*gcbuf->rows + 
@@ -415,8 +418,8 @@ void flushFrame(GridCharBuffer* gcbuf) {
     for (int row=0; row<gcbuf->rows; row++) {
         for (int col=0; col<gcbuf->cols; col++)  {
             if (prev_style_flags != gcbuf->buf[row][col].style.flags || 
-                getFlagState(gcbuf->buf[row][col].style.flags, FG_COLOR) && prev_fg_color != gcbuf->buf[row][col].style.fg_color_code ||
-                getFlagState(gcbuf->buf[row][col].style.flags, BG_COLOR) && prev_bg_color != gcbuf->buf[row][col].style.bg_color_code) 
+                (getFlagState(gcbuf->buf[row][col].style.flags, FG_COLOR) && prev_fg_color != gcbuf->buf[row][col].style.fg_color_code) ||
+                (getFlagState(gcbuf->buf[row][col].style.flags, BG_COLOR) && prev_bg_color != gcbuf->buf[row][col].style.bg_color_code)) 
             {
                 char style_buf[34]; // Taille maximale du buffer si tous les styles sont mit + reset sequence
                 int offset = sprintf(style_buf, "\x1b[0");
@@ -458,7 +461,8 @@ void flushFrame(GridCharBuffer* gcbuf) {
         die("\r\ni est plus grand que char_buf_byte_size");
     }
 
-    write(STDOUT_FILENO, char_buf, i);
+    if (write(STDOUT_FILENO, char_buf, i)<=0)
+        die("Write error while flushing new frame");
     free(char_buf);
 }
 
@@ -596,10 +600,10 @@ size_t u_strlen(char *s)
     return len;
 }
 
-size_t u_charlen(char *s)
+size_t u_charlen(unsigned char *s)
 {
     if (!s) return 0;
-    unsigned char c = (unsigned char)*s;
+    unsigned char c = *s;
 
     if (c < 0x80)        // 0xxxxxxx → ASCII (1 octet)
         return (size_t)1;
@@ -635,7 +639,7 @@ int isAnyAsciiChar(int c) {
 }
 
 int u_strAppend(u_string* s, int codepoint) {
-    char uchar[4];
+    unsigned char uchar[4];
     s->char_len++;
     int uchar_len = u_codeToBytes(codepoint, uchar);
     for (int i=0; i<uchar_len; i++) {
@@ -648,12 +652,17 @@ int u_strAppend(u_string* s, int codepoint) {
 
 int u_strPop(u_string* s) {
     if (s->byte_len > 0) {
+        int char_size = 0;
         do {
+            char_size++;
             s->byte_len--;
-        } while (s->byte_len>0 && !u_charlen(&s->buf[s->byte_len]));
+        } while (s->byte_len>0 && !u_charlen((unsigned char*)&s->buf[s->byte_len]));
         s->buf[s->byte_len] = '\0';
         s->char_len--;
-    }
+        return char_size;
+    } 
+    else
+        return 0;
 }
 
 int u_codeToBytes(unsigned int c, unsigned char* out) {
@@ -677,6 +686,8 @@ int u_codeToBytes(unsigned int c, unsigned char* out) {
         out[2] = (((c&0x0FC0)>>6)+0x80); // Mask the 6 first bits, should get the 6 middle bits
         out[3] = ((c&0x3F)+0x80); // Last 6 bits
         return 4;
+    } else {
+        return 0;
     }
 }
 
@@ -701,7 +712,7 @@ int u_bytesToCode(unsigned char* char_in) {
     return codepoint;
 }
 
-void drawText(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, const char* text) {
+void drawText(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, char* text) {
     // Iterate the string to get its size and pos
     int txt_width = u_strlen(text);
     for (int i=0; text[i]!='\0'; i++) {
@@ -709,6 +720,7 @@ void drawText(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_c
             i+=2;
             txt_width -= 3;
             while (text[i]!='}') {
+                char buf[100];
                 switch (text[i]) {
                 case 'F': // Set fg, checks next 3 vals for color
                 case 'B': // Set bg, checks next 3 vals for color
@@ -727,7 +739,6 @@ void drawText(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_c
                     txt_width -= 1;
                     break;
                 default: // any other char, should not happen
-                    char buf[34];
                     sprintf(buf, "Invalid text format: %c (drawText)", text[i]);
                     dieNoError(buf);
                     break;
@@ -746,6 +757,7 @@ void drawText(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_c
     TextStyle style = { 0, 0, 0 };
     int i=0;
     while(text[i]!='\0') {
+        int char_size;
         switch (text[i]){
         case '!':
             if (text[i+1]=='{') {
@@ -789,14 +801,14 @@ void drawText(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_c
                 i++; // Skips "}" 
             }
             else {
-                int char_size = u_charlen(&text[i]);
+                char_size = u_charlen((unsigned char*)&text[i]);
                 putGcbuf(gcbuf, pos_row, pos_col+col, &text[i], char_size, &style);
                 i+=char_size;
                 col++;
             }
             break;
         default:
-            int char_size = u_charlen(&text[i]);
+            char_size = u_charlen((unsigned char*)&text[i]);
             putGcbuf(gcbuf, pos_row, pos_col+col, &text[i], char_size, &style);
             i+=char_size;
             col++;
@@ -805,7 +817,7 @@ void drawText(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_c
     }
 }
 
-void drawTextWithRawStyle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, const char* text, TextStyle* style) {
+void drawTextWithRawStyle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, char* text, TextStyle* style) {
     int pos_row, pos_col;
     getDrawPosition(&pos_row, &pos_col, pos, gcbuf, u_strlen(text), 0);
     pos_row += offset_row;
@@ -813,14 +825,14 @@ void drawTextWithRawStyle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, 
     int row = 0;
     int i=0;
     while (text[i]!='\0') {
-        int char_size = u_charlen(&text[i]);
+        int char_size = u_charlen((unsigned char*)&text[i]);
         putGcbuf(gcbuf, pos_row, pos_col+row, &text[i], char_size, style);
         i+=char_size;
         row++;
     }
 }
 
-void drawButton(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, const char* text, unsigned char color_code, int selected) {
+void drawButton(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, char* text, unsigned char color_code, int selected) {
     size_t text_length = u_strlen(text);
     char buf[text_length+20];
     if (selected) sprintf(buf, "!{iB%03d}[<%s>]", color_code, text);
@@ -876,23 +888,47 @@ void drawSolidRect(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int off
 
 void drawTitle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col) {
     int logo_var = 4;
+
+    char line1_1[] = "░█▀█░█▀▀░▀█▀░█░█░█▀█░█▀▄░█░█░░░█▀█░█░█░█▀█░█░░░█▀▀";
+    char line1_2[] = "░█░█░█▀▀░░█░░█▄█░█░█░█▀▄░█▀▄░░░█▀█░█▄█░█▀█░█░░░█▀▀";
+    char line1_3[] = "░▀░▀░▀▀▀░░▀░░▀░▀░▀▀▀░▀░▀░▀░▀░░░▀░▀░▀░▀░▀░▀░▀▀▀░▀▀▀";
+
+    char line2_1[] = " _______          __                       __        _____                 .__          ";
+    char line2_2[] = " \\      \\   _____/  |___  _  _____________|  | __   /  _  \\__  _  _______  |  |   ____   ";
+    char line2_3[] = " /   |   \\_/ __ \\   __\\ \\/ \\/ /  _ \\_  __ \\  |/ /  /  /_\\  \\ \\/ \\/ /\\__  \\ |  | _/ __ \\ ";
+    char line2_4[] = "/    |    \\  ___/|  |  \\     (  <_> )  | \\/    <  /    |    \\     /  / __ \\|  |_\\  ___/ ";
+    char line2_5[] = "\\____|__  /\\___  >__|   \\/\\_/ \\____/|__|  |__|_ \\ \\____|__  /\\/\\_/  (____  /____/\\___  >";
+    char line2_6[] = "        \\/     \\/                              \\/         \\/             \\/          \\/ ";
+
+    char line3_1[] = "███╗   ██╗███████╗████████╗██╗    ██╗ ██████╗ ██████╗ ██╗  ██╗     █████╗ ██╗    ██╗ █████╗ ██╗     ███████╗";
+    char line3_2[] = "████╗  ██║██╔════╝╚══██╔══╝██║    ██║██╔═══██╗██╔══██╗██║ ██╔╝    ██╔══██╗██║    ██║██╔══██╗██║     ██╔════╝";
+    char line3_3[] = "██╔██╗ ██║█████╗     ██║   ██║ █╗ ██║██║   ██║██████╔╝█████╔╝     ███████║██║ █╗ ██║███████║██║     █████╗  ";
+    char line3_4[] = "██║╚██╗██║██╔══╝     ██║   ██║███╗██║██║   ██║██╔══██╗██╔═██╗     ██╔══██║██║███╗██║██╔══██║██║     ██╔══╝  ";
+    char line3_5[] = "██║ ╚████║███████╗   ██║   ╚███╔███╔╝╚██████╔╝██║  ██║██║  ██╗    ██║  ██║╚███╔███╔╝██║  ██║███████╗███████╗";
+    char line3_6[] = "╚═╝  ╚═══╝╚══════╝   ╚═╝    ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝    ╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚══════╝";
+    
+    char line4_1[] = "███╗   ██╗███████╗████████╗██╗    ██╗ ██████╗ ██████╗ ██╗  ██╗";
+    char line4_2[] = "████╗  ██║██╔════╝╚══██╔══╝██║    ██║██╔═══██╗██╔══██╗██║ ██╔╝";
+    char line4_3[] = "██╔██╗ ██║█████╗     ██║   ██║ █╗ ██║██║   ██║██████╔╝█████╔╝ ";
+    char line4_4[] = "██║╚██╗██║██╔══╝     ██║   ██║███╗██║██║   ██║██╔══██╗██╔═██╗ ";
+    char line4_5[] = "██║ ╚████║███████╗   ██║   ╚███╔███╔╝╚██████╔╝██║  ██║██║  ██╗";
+    char line4_6[] = "╚═╝  ╚═══╝╚══════╝   ╚═╝    ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝";
+    char line4_7[] = "            █████╗ ██╗    ██╗ █████╗ ██╗     ███████╗         ";
+    char line4_8[] = "           ██╔══██╗██║    ██║██╔══██╗██║     ██╔════╝         ";
+    char line4_9[] = "           ███████║██║ █╗ ██║███████║██║     █████╗           ";
+    char line4_10[]= "           ██╔══██║██║███╗██║██╔══██║██║     ██╔══╝           ";
+    char line4_11[]= "           ██║  ██║╚███╔███╔╝██║  ██║███████╗███████╗         ";
+    char line4_12[]= "           ╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚══════╝         ";
+    char line4_13[]= "!{F005}     ──────────────────  2   0   0   0  ──────────────────    ";
+
     switch (logo_var)
     {
     case 1:
-        char line1_1[] = "░█▀█░█▀▀░▀█▀░█░█░█▀█░█▀▄░█░█░░░█▀█░█░█░█▀█░█░░░█▀▀";
-        char line1_2[] = "░█░█░█▀▀░░█░░█▄█░█░█░█▀▄░█▀▄░░░█▀█░█▄█░█▀█░█░░░█▀▀";
-        char line1_3[] = "░▀░▀░▀▀▀░░▀░░▀░▀░▀▀▀░▀░▀░▀░▀░░░▀░▀░▀░▀░▀░▀░▀▀▀░▀▀▀";
         drawText(gcbuf, pos, -1+offset_row, 0+offset_col, line1_1);
         drawText(gcbuf, pos, 0+offset_row, 0+offset_col, line1_2);
         drawText(gcbuf, pos, 1+offset_row, 0+offset_col, line1_3);
         break;
     case 2:
-        char line2_1[] = " _______          __                       __        _____                 .__          ";
-        char line2_2[] = " \\      \\   _____/  |___  _  _____________|  | __   /  _  \\__  _  _______  |  |   ____   ";
-        char line2_3[] = " /   |   \\_/ __ \\   __\\ \\/ \\/ /  _ \\_  __ \\  |/ /  /  /_\\  \\ \\/ \\/ /\\__  \\ |  | _/ __ \\ ";
-        char line2_4[] = "/    |    \\  ___/|  |  \\     (  <_> )  | \\/    <  /    |    \\     /  / __ \\|  |_\\  ___/ ";
-        char line2_5[] = "\\____|__  /\\___  >__|   \\/\\_/ \\____/|__|  |__|_ \\ \\____|__  /\\/\\_/  (____  /____/\\___  >";
-        char line2_6[] = "        \\/     \\/                              \\/         \\/             \\/          \\/ ";
         drawText(gcbuf, pos, -2+offset_row, 0+offset_col, line2_1);
         drawText(gcbuf, pos, -1+offset_row, 0+offset_col, line2_2);
         drawText(gcbuf, pos, 0+offset_row, 0+offset_col, line2_3);
@@ -901,12 +937,6 @@ void drawTitle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_
         drawText(gcbuf, pos, 3+offset_row, 0+offset_col, line2_6);
         break;
     case 3:
-        char line3_1[] = "███╗   ██╗███████╗████████╗██╗    ██╗ ██████╗ ██████╗ ██╗  ██╗     █████╗ ██╗    ██╗ █████╗ ██╗     ███████╗";
-        char line3_2[] = "████╗  ██║██╔════╝╚══██╔══╝██║    ██║██╔═══██╗██╔══██╗██║ ██╔╝    ██╔══██╗██║    ██║██╔══██╗██║     ██╔════╝";
-        char line3_3[] = "██╔██╗ ██║█████╗     ██║   ██║ █╗ ██║██║   ██║██████╔╝█████╔╝     ███████║██║ █╗ ██║███████║██║     █████╗  ";
-        char line3_4[] = "██║╚██╗██║██╔══╝     ██║   ██║███╗██║██║   ██║██╔══██╗██╔═██╗     ██╔══██║██║███╗██║██╔══██║██║     ██╔══╝  ";
-        char line3_5[] = "██║ ╚████║███████╗   ██║   ╚███╔███╔╝╚██████╔╝██║  ██║██║  ██╗    ██║  ██║╚███╔███╔╝██║  ██║███████╗███████╗";
-        char line3_6[] = "╚═╝  ╚═══╝╚══════╝   ╚═╝    ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝    ╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚══════╝";
         drawText(gcbuf, pos, -2+offset_row, 0+offset_col, line3_1);
         drawText(gcbuf, pos, -1+offset_row, 0+offset_col, line3_2);
         drawText(gcbuf, pos, 0+offset_row, 0+offset_col, line3_3);
@@ -915,19 +945,6 @@ void drawTitle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_
         drawText(gcbuf, pos, 3+offset_row, 0+offset_col, line3_6);
         break;
     case 4:
-        char line4_1[] = "███╗   ██╗███████╗████████╗██╗    ██╗ ██████╗ ██████╗ ██╗  ██╗";
-        char line4_2[] = "████╗  ██║██╔════╝╚══██╔══╝██║    ██║██╔═══██╗██╔══██╗██║ ██╔╝";
-        char line4_3[] = "██╔██╗ ██║█████╗     ██║   ██║ █╗ ██║██║   ██║██████╔╝█████╔╝ ";
-        char line4_4[] = "██║╚██╗██║██╔══╝     ██║   ██║███╗██║██║   ██║██╔══██╗██╔═██╗ ";
-        char line4_5[] = "██║ ╚████║███████╗   ██║   ╚███╔███╔╝╚██████╔╝██║  ██║██║  ██╗";
-        char line4_6[] = "╚═╝  ╚═══╝╚══════╝   ╚═╝    ╚══╝╚══╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝";
-        char line4_7[] = "            █████╗ ██╗    ██╗ █████╗ ██╗     ███████╗         ";
-        char line4_8[] = "           ██╔══██╗██║    ██║██╔══██╗██║     ██╔════╝         ";
-        char line4_9[] = "           ███████║██║ █╗ ██║███████║██║     █████╗           ";
-        char line4_10[]= "           ██╔══██║██║███╗██║██╔══██║██║     ██╔══╝           ";
-        char line4_11[]= "           ██║  ██║╚███╔███╔╝██║  ██║███████╗███████╗         ";
-        char line4_12[]= "           ╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚══════╝         ";
-        char line4_13[]= "!{F005}     ──────────────────  2   0   0   0  ──────────────────    ";
         drawText(gcbuf, pos, -6+offset_row, 0+offset_col, line4_1);
         drawText(gcbuf, pos, -5+offset_row, 0+offset_col, line4_2);
         drawText(gcbuf, pos, -4+offset_row, 0+offset_col, line4_3);
@@ -949,8 +966,8 @@ void drawTitle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_
     }
 }
 
-void drawPopup(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, TextStyle* style, int width, int height, const char* text) {
+void drawPopup(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, TextStyle* style, int width, int height, char* text) {
     drawSolidRect(gcbuf, pos, offset_row+1, offset_col+1, width, height, style);
     drawStrongBox(gcbuf, pos, offset_row, offset_col, style, width, height);
-    drawText(gcbuf, pos, offset_row-1, offset_col, text);
+    drawText(gcbuf, pos, offset_row-(1-height%2), offset_col, text);
 }

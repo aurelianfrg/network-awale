@@ -22,6 +22,7 @@ char is_notified = 0;
 char notification_message[200];
 char is_waiting_for_game_response = 0;
 char is_game_request_pending = 0;
+char is_chat_open = 0;
 
 // USER CREATION
 char user_pseudo_buf[USERNAME_LENGTH];
@@ -124,7 +125,9 @@ void frameContent(GridCharBuffer* gcbuf) {
         drawText(gcbuf, TOP_LEFT, row, col, user); row++;
         TextStyle selected_style = { mkStyleFlags(1, INVERSE), 0, 0 };
         while (i<users_list_count) {
-            sprintf(user, "%s - %d", users_list_buf[i], users_list_id[i]);
+            users_list_buf[i][99] = '\0';
+            char user_pseudo[100]; strcpy(user_pseudo, users_list_buf[i]);
+            sprintf(user, "%s - %d", user_pseudo, users_list_id[i]);
             drawTextWithRawStyle(gcbuf, TOP_LEFT, row, col, user, (i==selected_field)?&selected_style:NO_STYLE);
             row++;
             if (row > gcbuf->rows-3) {
@@ -159,20 +162,22 @@ void frameContent(GridCharBuffer* gcbuf) {
     case GAME_END_MENU:
         hideCursor();
         TextStyle faint_style = { mkStyleFlags(1, FAINT), 0, 0 };
-        User* winner = (winning_side==connected_user_side)?&connected_user:&opponent_user; 
-        sprintf(general_display_buf, "Victoire de !{u}%s-%d!{r}", winner->username, winner->id);
-        drawPopup(gcbuf, CENTER, -10, 0, NO_STYLE, u_strlen(general_display_buf), 1, general_display_buf);
+        if (winning_side==connected_user_side)
+            drawPopup(gcbuf, CENTER, -10, 0, NO_STYLE, 13, 1, "Victoire !");
+        else
+            drawPopup(gcbuf, CENTER, -10, 0, NO_STYLE, 13, 1, "Défaite :(");
+
         // Points
         sprintf(general_display_buf, "Opposant: !{u}%s-%d!{r}", opponent_user.username, opponent_user.id);
-        drawText(gcbuf, CENTER, -6, 10, general_display_buf);
+        drawText(gcbuf, CENTER, -6, 20, general_display_buf);
         sprintf(general_display_buf, "%d points", current_game_snapshot.points[opponent_user_side]);
-        drawText(gcbuf, CENTER, -5, 10, general_display_buf);
+        drawText(gcbuf, CENTER, -5, 20, general_display_buf);
         sprintf(general_display_buf, "Vous: !{u}%s-%d!{r}", connected_user.username, connected_user.id);
-        drawText(gcbuf, CENTER, -6, -10, general_display_buf);
+        drawText(gcbuf, CENTER, -6, -20, general_display_buf);
         sprintf(general_display_buf, "%d points", current_game_snapshot.points[connected_user_side]);
-        drawText(gcbuf, CENTER, -5, -10, general_display_buf);
+        drawText(gcbuf, CENTER, -5, -20, general_display_buf);
         drawAwaleBoard(gcbuf, CENTER, 4, 0, &faint_style, &faint_style);
-        drawButton(gcbuf, BOTTOM_CENTER, -2, 0, "Retourner à l'accueil", 13, 1);
+        drawButton(gcbuf, BOTTOM_CENTER, -3, 0, "Retourner à l'accueil", 13, 1);
 
         break;
     
@@ -336,7 +341,7 @@ void processEvents(struct pollfd pfds[2]) {
                     sendMessageMatchCancellation(sock);
                     changeMenu(MAIN_MENU);
                 }
-                else if (c==KEY_ENTER && selected_field==IG_AWALE_HOUSE) {
+                else if (c==KEY_ENTER && selected_field==IG_AWALE_HOUSE && current_game_snapshot.turn == connected_user_side) {
                     MessageGameMove mes = {
                         (connected_user_side==BOTTOM)?
                         selected_awale_house:
@@ -358,32 +363,35 @@ void processEvents(struct pollfd pfds[2]) {
 
     // socket
     if (pfds[1].revents & POLLIN) {
-        int32_t message_type; ssize_t r;
-        r = recieve_from_server(&message_type, sizeof(int32_t));
-    
+        int32_t message_type;
+        recieve_from_server(&message_type, sizeof(int32_t));
+
+        // Vars used in switch (<C99 complience)
+        int32_t user_count;
+        int32_t res;
+
         switch (message_type) {
         case USER_REGISTRATION:
-            r = recieve_from_server(&(connected_user.id), sizeof(int32_t));
+            recieve_from_server(&(connected_user.id), sizeof(int32_t));
             strcpy(connected_user.username, user_pseudo.buf);
             is_waiting = 0;
             changeMenu(MAIN_MENU);
             break;
 
         case SEND_USER_LIST:
-            int32_t user_count;
-            r = recieve_from_server(&user_count, sizeof(int32_t));
+            recieve_from_server(&user_count, sizeof(int32_t));
             users_list_count = user_count;
             if (user_count > 0) {
-                r = recieve_from_server(users_list_buf, sizeof(char)*user_count*USERNAME_LENGTH);
-                r = recieve_from_server(users_list_id, sizeof(int32_t)*user_count);
+                recieve_from_server(users_list_buf, sizeof(char)*user_count*USERNAME_LENGTH);
+                recieve_from_server(users_list_id, sizeof(int32_t)*user_count);
             }
             is_waiting = 0;
             changeMenu(USER_LIST_MENU);
             break;
 
         case MATCH_PROPOSITION:
-            r = recieve_from_server(&(opponent_user.id), sizeof(int32_t));
-            r = recieve_from_server(&(opponent_user.username), sizeof(char)*USERNAME_LENGTH);
+            recieve_from_server(&(opponent_user.id), sizeof(int32_t));
+            recieve_from_server(&(opponent_user.username), sizeof(char)*USERNAME_LENGTH);
             is_game_request_pending = 1;
             game_request_selected_field = 0;
             break;
@@ -400,14 +408,15 @@ void processEvents(struct pollfd pfds[2]) {
             break;
 
         case MATCH_RESPONSE:
-            int32_t res;
-            r = recieve_from_server(&res, sizeof(int32_t));
-            if (res)
+            recieve_from_server(&res, sizeof(int32_t));
+            if (res) {
                 changeMenu(IN_GAME_MENU);
-            else
+            }
+            else {
                 changeMenu(MAIN_MENU);
                 is_notified = 1;
                 strcpy(notification_message, "Partie refusée");
+            }
             is_waiting = 0;
             is_waiting_for_game_response = 0;
             break;
@@ -416,30 +425,31 @@ void processEvents(struct pollfd pfds[2]) {
             changeMenu(IN_GAME_MENU);
             is_waiting = 0;
             is_waiting_for_game_response = 0;
-            r = recieve_from_server(&(opponent_user.username), sizeof(char)*USERNAME_LENGTH);
-            r = recieve_from_server(&connected_user_side, sizeof(int32_t));
+            recieve_from_server(&(opponent_user.username), sizeof(char)*USERNAME_LENGTH);
+            recieve_from_server(&connected_user_side, sizeof(int32_t));
             opponent_user_side = !connected_user_side;
-            r = recieve_from_server(&current_game_snapshot, sizeof(GameSnapshot));
+            recieve_from_server(&current_game_snapshot, sizeof(GameSnapshot));
             break;
 
         case GAME_UPDATE:
-            r = recieve_from_server(&current_game_snapshot, sizeof(GameSnapshot));
+            recieve_from_server(&current_game_snapshot, sizeof(GameSnapshot));
             break;
 
         case GAME_END:
-            r = recieve_from_server(&winning_side, sizeof(int32_t));
-            r = recieve_from_server(&current_game_snapshot, sizeof(GameSnapshot));
+            recieve_from_server(&winning_side, sizeof(int32_t));
+            recieve_from_server(&current_game_snapshot, sizeof(GameSnapshot));
             changeMenu(GAME_END_MENU);
             break;
 
         case GAME_ILLEGAL_MOVE:
             strcpy(notification_message, "This move is illegal");
             is_notified = 1;
+            current_game_snapshot.turn = !current_game_snapshot.turn;
             break;
 
         default:
-            char buf[100]; sprintf(buf, "UNKWOWN MESSAGE: %d", message_type);
-            dieNoError(buf);
+            sprintf(general_display_buf, "UNKWOWN MESSAGE: %d", message_type);
+            dieNoError(general_display_buf);
             break;
         }
     }
@@ -482,9 +492,8 @@ ssize_t recieve_from_server(void* buffer, size_t size) {
     } else if (r == 0) {
         close(sock);
         die("Server closed connection.\n");
-    } else {
-        return r;
     }
+    return r;
 }
 
 void connect_to_server(const char* server_ip, int port, int* sock_out, struct sockaddr_in* srv_out) {
@@ -584,5 +593,5 @@ void drawAwaleBoard(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int of
         );
     }
     for (int i=0; i<board_width; i++)
-        drawTextWithRawStyle(gcbuf, TOP_LEFT, pos_row+board_height/2+offset_row, pos_col+i, "═", &center_style);
+        drawTextWithRawStyle(gcbuf, TOP_LEFT, pos_row+board_height/2, pos_col+i, "═", &center_style);
 }
