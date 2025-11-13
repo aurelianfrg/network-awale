@@ -519,11 +519,19 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             }
             else {
                 // game was won by current user (success code 1)
+                printf("User %d (%s) won the game !\n", user_index, source_user->username);
                 MessageGameEnd end_message;
                 end_message.winner = game->snapshot.turn;
                 end_message.final_snapshot = game->snapshot;
                 sendMessageGameEnd(game->players[BOTTOM]->fd, end_message);
                 sendMessageGameEnd(game->players[TOP]->fd, end_message);
+
+                // remove active game from users
+                game->players[BOTTOM]->active_game = NULL;
+                game->players[TOP]->active_game = NULL;
+                game->players[BOTTOM]->pending_game= NULL;
+                game->players[TOP]->pending_game = NULL;
+                free(game);
             }
             break;
 
