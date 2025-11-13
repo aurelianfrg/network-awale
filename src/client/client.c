@@ -579,7 +579,7 @@ void drawAwaleBoard(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int of
             current_game_snapshot.board.houses[i+6].seeds;
         drawAwaleHouse(
             gcbuf, TOP_LEFT, 
-            pos_row-AWALE_HOUSE_HEIGHT+offset_row, pos_col+(AWALE_HOUSE_WIDTH+1)*i, drawnStyle,
+            pos_row+board_height-AWALE_HOUSE_HEIGHT, pos_col+(AWALE_HOUSE_WIDTH+1)*i, drawnStyle,
             seedCount, BOTTOM
         );
     }
