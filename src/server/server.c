@@ -550,10 +550,20 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             }
 
             char message_content[MAX_CHAT_MESSAGE_LENTGH];
-            strcpy(&message_ptr, &message_content);
+            strcpy(message_content, message_ptr);
 
-            printf("user %s sent message %s.\n", source_user->username, message_content);
-            
+            printf("user %s sent message \"%s\".\n", source_user->username, message_content);
+
+            game = source_user->active_game;
+            // redirect message to opponent
+            if (source_user == game->players[BOTTOM]) {
+                sendMessageChat(game->players[TOP]->fd, message_content);
+            }
+            else {
+                sendMessageChat(game->players[BOTTOM]->fd, message_content);
+            }
+
+            break;
 
         default:
             return -1;
