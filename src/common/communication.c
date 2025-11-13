@@ -37,6 +37,9 @@ int isMessageComplete(int32_t message_type, ssize_t r) {
         case MATCH_CANCELLATION:
             expected = sizeof(int32_t);
             break;
+        case CHAT_MESSAGE:
+            expected = sizeof(int32_t) + MAX_CHAT_MESSAGE_LENTGH;
+            break;
         default: 
             printf("error: unknown length for message of type %d.\n", message_type);
             exit(-1);

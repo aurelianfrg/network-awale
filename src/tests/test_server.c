@@ -15,7 +15,7 @@
 // executable test for when the server is running
 
 
-void connect_to_server(const char* server_ip, int port, int* sock_out, struct sockaddr_in* srv_out) {
+void connect_to_server(const char* server_ip, int32_t port, int32_t* sock_out, struct sockaddr_in* srv_out) {
     if (port <= 0 || port > 65535) {
         fprintf(stderr, "Invalid port: %d\n", port);
         exit(-1);
@@ -49,9 +49,9 @@ int main(int argc, char **argv) {
     }
 
     // NETWORKING
-    int sock;
+    int32_t sock;
     struct sockaddr_in srv;
-    int port = atoi(argv[2]);
+    int32_t port = atoi(argv[2]);
     const char *server_ip = argv[1];
     printf("before connection.\n");
     connect_to_server(server_ip, port, &sock, &srv);
@@ -67,7 +67,7 @@ int main(int argc, char **argv) {
 
     // get response from server
     int32_t message_type;
-    recv(sock, &message_type, sizeof(int), 0);
+    recv(sock, &message_type, sizeof(int32_t), 0);
     if (message_type == USER_REGISTRATION) {
         MessageUserRegistration msg;
         recv(sock, &msg, sizeof(msg), 0);
@@ -83,14 +83,14 @@ int main(int argc, char **argv) {
 
 
     // init a second connection
-    int sock2;
+    int32_t sock2;
     struct sockaddr_in srv2;
     connect_to_server(server_ip, port, &sock2, &srv2);
     // register the second player
     MessageUserCreation user_creation_msg2;
     strcpy(user_creation_msg2.username, "Anatouuu");
     sendMessageUserCreation(sock2, user_creation_msg2);
-    recv(sock2, &message_type, sizeof(int), 0);
+    recv(sock2, &message_type, sizeof(int32_t), 0);
     if (message_type == USER_REGISTRATION) {
         MessageUserRegistration msg;
         recv(sock2, &msg, sizeof(msg), 0);
@@ -101,14 +101,14 @@ int main(int argc, char **argv) {
     }
 
     // init a third connection
-    int sock3;
+    int32_t sock3;
     struct sockaddr_in srv3;
     connect_to_server(server_ip, port, &sock3, &srv3);
     // register the third player
     MessageUserCreation user_creation_msg3;
     strcpy(user_creation_msg3.username, "autre");
     sendMessageUserCreation(sock3, user_creation_msg3);
-    recv(sock3, &message_type, sizeof(int), 0);
+    recv(sock3, &message_type, sizeof(int32_t), 0);
     if (message_type == USER_REGISTRATION) {
         MessageUserRegistration msg;
         recv(sock3, &msg, sizeof(msg), 0);
@@ -121,20 +121,20 @@ int main(int argc, char **argv) {
     // get users list
     sendMessageGetUserList(sock);
     // hopefully get server response
-    recv(sock, &message_type, sizeof(int), 0);
+    recv(sock, &message_type, sizeof(int32_t), 0);
     if (message_type == SEND_USER_LIST) {
-        int usernames_count;
-        recv(sock, &usernames_count, sizeof(int), 0);
+        int32_t usernames_count;
+        recv(sock, &usernames_count, sizeof(int32_t), 0);
         char buffer[USERNAME_LENGTH];
         printf("Users : \n");
         for (int i = 0; i < usernames_count; ++i) {
             recv(sock, &buffer, sizeof(char)*USERNAME_LENGTH, 0);
             printf(" - %s\n", buffer);
         }
-        int id;
+        int32_t id;
         printf("Corresponding ids : \n");
         for (int i = 0; i < usernames_count; ++i) {
-            recv(sock, &id, sizeof(int), 0);
+            recv(sock, &id, sizeof(int32_t), 0);
             printf(" - %d\n", id);
         }
     }
@@ -145,7 +145,7 @@ int main(int argc, char **argv) {
     sendMessageMatchRequest(sock, req);
     printf("sending match request from 0 to 1.\n");
 
-    recv(sock2, &message_type, sizeof(int), 0);
+    recv(sock2, &message_type, sizeof(int32_t), 0);
     if (message_type == MATCH_PROPOSITION) {
         printf("2 received match proposition.\n");
         MessageMatchProposition invite_msg;
@@ -169,7 +169,7 @@ int main(int argc, char **argv) {
     // sendMessageMatchRequest(sock, req);
     // printf("sending match request from 0 to 1.\n");
 
-    // recv(sock2, &message_type, sizeof(int), 0);
+    // recv(sock2, &message_type, sizeof(int32_t), 0);
     // if (message_type == MATCH_PROPOSITION) {
     //     printf("2 received match proposition.\n");
     //     MessageMatchProposition invite_msg;
@@ -182,7 +182,7 @@ int main(int argc, char **argv) {
     // user 2 accepts game creation
     sendMessageMatchResponse(sock2, true);
 
-    recv(sock, &message_type, sizeof(int), 0);
+    recv(sock, &message_type, sizeof(int32_t), 0);
     MessageGameStart start_mes;
     if (message_type == GAME_START) {
         printf("player 0 received game start message.\n");
@@ -190,7 +190,7 @@ int main(int argc, char **argv) {
     }
     else { printf("error: unexpected message %d\n", message_type); }
 
-    recv(sock2, &message_type, sizeof(int), 0);
+    recv(sock2, &message_type, sizeof(int32_t), 0);
     if (message_type == GAME_START) {
         printf("player 1 received game start message.\n");
         recv(sock2, &start_mes, sizeof(start_mes), 0);
@@ -228,6 +228,17 @@ int main(int argc, char **argv) {
     }
     else { printf("error: unexpected message %d\n", message_type); }
 
+    // testing chat 
+    char message1[MAX_CHAT_MESSAGE_LENTGH] = "coucou";
+    sendMessageChat(sock3, message1); // message must be ignored by server because not in game
+    sleep(1);
+    sendMessageChat(sock2, message1); // message must be transmitted to user 0
+    recv(sock, &message_type, sizeof(int32_t), 0);
+    if (message_type == CHAT_MESSAGE) {
+        char received_message[MAX_CHAT_MESSAGE_LENTGH];
+        recv(sock, &received_message, MAX_CHAT_MESSAGE_LENTGH, 0);
+        printf("user 0 received the message \"%s\" from opponent 1.\n", received_message);
+    }
 
 
     getchar();
