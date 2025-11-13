@@ -535,6 +535,26 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             }
             break;
 
+        case CHAT_MESSAGE:
+            printf("CHAT_MESSAGE\n");
+            // check that user is indeed created
+            if (source_user == NULL) {
+                printf("error: Got a request from an unregistered user.\n");
+                return -1;
+            }
+            
+            // check it has indeed an active game
+            if (source_user->active_game == NULL) {
+                printf("error: user %d (%s) sent a message but is in no active game.\n", user_index, source_user->username);
+                return -1;
+            }
+
+            char message_content[MAX_CHAT_MESSAGE_LENTGH];
+            strcpy(&message_ptr, &message_content);
+
+            printf("user %s sent message %s.\n", source_user->username, message_content);
+            
+
         default:
             return -1;
         

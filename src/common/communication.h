@@ -10,6 +10,7 @@
 
 #include "game.h"
 #define MAX_CLIENTS 1024
+#define MAX_CHAT_MESSAGE_LENTGH 1024
 
 
 typedef enum MessageType {
@@ -25,7 +26,8 @@ typedef enum MessageType {
     GAME_UPDATE,            // server -> client
     GAME_END,               // server -> client
     GAME_MOVE,              // client -> server
-    GAME_ILLEGAL_MOVE       // server -> client
+    GAME_ILLEGAL_MOVE,      // server -> client
+    CHAT_MESSAGE            // client1 -> server | server -> client2
 } MessageType;
 
 
@@ -43,7 +45,7 @@ typedef struct MessageMatchRequest {
 
 typedef struct MessageGameStart {
     char opponent_username[USERNAME_LENGTH];
-    Side player_side;
+    int32_t player_side;
     GameSnapshot first_snapshot;
 } MessageGameStart;
 
@@ -88,3 +90,5 @@ void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int32_t 
 void sendMessageMatchResponse(int fd, int response);
 void sendMessageMatchProposition(int fd, MessageMatchProposition message);
 void sendMessageMatchCancellation(int fd);
+
+void sendMessageChat(int fd, const char content[MAX_CHAT_MESSAGE_LENTGH]);

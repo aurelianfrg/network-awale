@@ -213,7 +213,18 @@ void sendMessageGameIllegalMove(int fd) {
     send(fd, &msg, sizeof(msg), 0);
 }
 
+void sendMessageChat(int fd, const char content[MAX_CHAT_MESSAGE_LENTGH]) {
 
+    typedef struct MessageWithHeader {
+        int32_t message_type;
+        char message[MAX_CHAT_MESSAGE_LENTGH];
+    } MessageWithHeader;
+
+    MessageWithHeader message_with_header;
+    message_with_header.message_type = CHAT_MESSAGE;
+    strcpy(message_with_header.message, content);
+    send(fd, &message_with_header, sizeof(MessageWithHeader), 0);
+}
 
 
 // void sendMessageXXX(int fd, MessageXXX message) {
