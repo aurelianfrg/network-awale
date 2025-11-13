@@ -492,7 +492,6 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             Game* game = source_user->active_game;
             
             // check it was the right user that played the move
-            int valid_move;
             int success_code;
             if ( game->snapshot.turn == BOTTOM && source_user == game->players[BOTTOM]) {
                 printf("BOTTOM user %d (%s) played the move %d.\n", user_index, source_user->username, move_message.selected_house);
@@ -505,19 +504,26 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             else {
                 success_code = -5;
             }
-
-            valid_move = (success_code == 0);
-            if (!valid_move) {
+            
+            if (success_code < 0) {
                 printf("Move is illegal, notifying sender (failure code %d).\n", success_code);
                 sendMessageGameIllegalMove(source_user->fd);
             }
-            else {
+            else if (success_code == 0) {
                 printf("Valid move played by user %d (%s), game updated.\n", user_index, source_user->username);
                 MessageGameUpdate update;
                 update.snapshot = game->snapshot;
                 sendMessageGameUpdate(game->players[BOTTOM]->fd, update);
                 sendMessageGameUpdate(game->players[TOP]->fd, update);
                 simpleGamePrinting(game);
+            }
+            else {
+                // game was won by current user (success code 1)
+                MessageGameEnd end_message;
+                end_message.winner = game->snapshot.turn;
+                end_message.final_snapshot = game->snapshot;
+                sendMessageGameEnd(game->players[BOTTOM]->fd, end_message);
+                sendMessageGameEnd(game->players[TOP]->fd, end_message);
             }
             break;
 

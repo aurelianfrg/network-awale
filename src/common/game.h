@@ -64,7 +64,10 @@ User* createUser(const char name[], int fd) ;
 
 int playMove(Game* game, Side turn, int selected_house);
 // play the action of a move and updates the game snapshot
-// returns a negative value if the move was not allowed
+// returns:
+// - a negative value if the move was not allowed
+// - 0 if move was valid
+// - 1 if game reached the end (user reached 12 points)
 
 void finishGame(Game* game);
 

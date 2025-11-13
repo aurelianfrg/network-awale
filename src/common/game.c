@@ -98,6 +98,11 @@ int playMove(Game* game, Side turn, int selected_house) {
         house_to_check = precedent_house(house_to_check);
     }
     
+    //game ends whenever a player reaches 12 points
+    if (game->snapshot.points[turn] >= 12) {
+        return 1;
+    }
+
     // turn is over, change game turn
     game->snapshot.turn = !(game->snapshot.turn);
     
