@@ -52,7 +52,7 @@ typedef struct MessageGameUpdate {
 } MessageGameUpdate;
 
 typedef struct MessageGameEnd {
-    Side winner;
+    int32_t winner;
     GameSnapshot final_snapshot;
 } MessageGameEnd;
 

@@ -741,7 +741,7 @@ void drawText(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_c
     getDrawPosition(&pos_row, &pos_col, pos, gcbuf, txt_width, 0);
     pos_row += offset_row;
     pos_col += offset_col;
-    int row = 0;
+    int col = 0;
     // Iterate again to build the result
     TextStyle style = { 0, 0, 0 };
     int i=0;
@@ -790,16 +790,16 @@ void drawText(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_c
             }
             else {
                 int char_size = u_charlen(&text[i]);
-                putGcbuf(gcbuf, pos_row, pos_col+row, &text[i], char_size, &style);
+                putGcbuf(gcbuf, pos_row, pos_col+col, &text[i], char_size, &style);
                 i+=char_size;
-                row++;
+                col++;
             }
             break;
         default:
             int char_size = u_charlen(&text[i]);
-            putGcbuf(gcbuf, pos_row, pos_col+row, &text[i], char_size, &style);
+            putGcbuf(gcbuf, pos_row, pos_col+col, &text[i], char_size, &style);
             i+=char_size;
-            row++;
+            col++;
             break;
         }
     }
@@ -822,7 +822,7 @@ void drawTextWithRawStyle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, 
 
 void drawButton(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, const char* text, unsigned char color_code, int selected) {
     size_t text_length = u_strlen(text);
-    char buf[text_length+13];
+    char buf[text_length+20];
     if (selected) sprintf(buf, "!{iB%03d}[<%s>]", color_code, text);
     else sprintf(buf, "!{iF%03d}[<%s>]", color_code, text);
     
@@ -952,5 +952,5 @@ void drawTitle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_
 void drawPopup(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, TextStyle* style, int width, int height, const char* text) {
     drawSolidRect(gcbuf, pos, offset_row+1, offset_col+1, width, height, style);
     drawStrongBox(gcbuf, pos, offset_row, offset_col, style, width, height);
-    drawText(gcbuf, pos, offset_row, offset_col, text);
+    drawText(gcbuf, pos, offset_row-1, offset_col, text);
 }
