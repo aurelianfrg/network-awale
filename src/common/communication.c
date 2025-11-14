@@ -236,6 +236,44 @@ void sendMessageChat(int fd, MessageChat message) {
     send(fd, &message_with_header, sizeof(MessageWithHeader), 0);
 }
 
+void sendMessageSpectatorJoin(int fd, MessageSpectatorJoin message) {
+    typedef struct MessageWithHeader {
+        int32_t message_type;
+        MessageSpectatorJoin message;
+    } MessageWithHeader;
+
+    MessageWithHeader message_with_header;
+    message_with_header.message_type = SPECTATOR_JOIN;
+    message_with_header.message = message;
+
+    send(fd, &message_with_header, sizeof(message_with_header), 0);
+}
+
+void sendMessageSpectatorLeave(int fd, MessageSpectatorLeave message) {
+    typedef struct MessageWithHeader {
+        int32_t message_type;
+        MessageSpectatorLeave message;
+    } MessageWithHeader;
+
+    MessageWithHeader message_with_header;
+    message_with_header.message_type = SPECTATOR_LEAVE;
+    message_with_header.message = message;
+
+    send(fd, &message_with_header, sizeof(message_with_header), 0);
+}
+
+void sendMessageObserve(int fd, MessageObserve message) {
+    typedef struct MessageWithHeader {
+        int32_t message_type;
+        MessageObserve message;
+    } MessageWithHeader;
+
+    MessageWithHeader message_with_header;
+    message_with_header.message_type = OBSERVE_GAME;
+    message_with_header.message = message;
+
+    send(fd, &message_with_header, sizeof(message_with_header), 0);
+}
 
 // void sendMessageXXX(int fd, MessageXXX message) {
 
@@ -250,3 +288,4 @@ void sendMessageChat(int fd, MessageChat message) {
 
 //     send(fd, &message_with_header, sizeof(message_with_header), 0);
 // }
+

@@ -80,6 +80,13 @@ typedef struct MessageObserve {
     int32_t player_to_observe_id;
 } MessageObserve;
 
+typedef struct MessageSpectatorJoin {
+    char spectator_username[USERNAME_LENGTH];
+} MessageSpectatorJoin;
+
+typedef struct MessageSpectatorLeave {
+    char spectator_username[USERNAME_LENGTH];
+} MessageSpectatorLeave;
 
 
 int isMessageComplete(int32_t message_type, ssize_t r);
@@ -106,3 +113,5 @@ void sendMessageMatchCancellation(int fd);
 
 void sendMessageChat(int fd, MessageChat message);
 void sendMessageObserve(int fd, MessageObserve message);
+void sendMessageSpectatorJoin(int fd, MessageSpectatorJoin message);
+void sendMessageSpectatorLeave(int fd, MessageSpectatorLeave message);
