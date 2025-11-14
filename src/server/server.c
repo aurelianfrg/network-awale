@@ -673,7 +673,7 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             break;
 
         case STOP_OBSERVING:
-            printf("OBSERVE_GAME\n");
+            printf("STOP_OBSERVING\n");
             // check that user is indeed created
             if (source_user == NULL) {
                 printf("error: Got a request from an unregistered user.\n");
