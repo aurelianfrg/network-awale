@@ -215,18 +215,18 @@ int main(int argc, char **argv) {
     else { printf("error: unexpected message %d\n", message_type); }
 
 
-    printf("Player 1 makes a move.\n");
-    move_message.selected_house = 8;
-    sendMessageGameMove(sock2, move_message);
+    // printf("Player 1 makes a move.\n");
+    // move_message.selected_house = 8;
+    // sendMessageGameMove(sock2, move_message);
 
-    recv(sock, &message_type, sizeof(int32_t), 0);
-    if (message_type==GAME_UPDATE) {
-        printf("Game update from server received.\n");
-        MessageGameUpdate mes;
-        recv(sock, &mes, sizeof(MessageGameUpdate), 0);
-        simpleSnapshotPrinting(&mes.snapshot);
-    }
-    else { printf("error: unexpected message %d\n", message_type); }
+    // recv(sock, &message_type, sizeof(int32_t), 0);
+    // if (message_type==GAME_UPDATE) {
+    //     printf("Game update from server received.\n");
+    //     MessageGameUpdate mes;
+    //     recv(sock, &mes, sizeof(MessageGameUpdate), 0);
+    //     simpleSnapshotPrinting(&mes.snapshot);
+    // }
+    // else { printf("error: unexpected message %d\n", message_type); }
 
     // testing chat 
     // char message1[MAX_CHAT_MESSAGE_LENTGH] = "coucou";
@@ -239,6 +239,20 @@ int main(int argc, char **argv) {
     //     recv(sock, &received_message, MAX_CHAT_MESSAGE_LENTGH, 0);
     //     printf("user 0 received the message \"%s\" from opponent 1.\n", received_message);
     // }
+
+    // test observation
+    MessageObserve message_observe;
+    message_observe.player_to_observe_id = 0;
+    sendMessageObserve(sock3, message_observe);
+
+    recv(sock3, &message_type, sizeof(int32_t), 0);
+    if (message_type==OBSERVATION_START) {
+        printf("Observation start from server received.\n");
+        MessageObservationStart observe_mes;
+        recv(sock3, &observe_mes, sizeof(MessageObservationStart), 0);
+        simpleSnapshotPrinting(&observe_mes.snapshot);
+    }
+    else { printf("error: unexpected message %d\n", message_type); }
 
 
     getchar();

@@ -553,6 +553,7 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
 
                 // update observers 
                 for (int i = 0; i < game->observers_count; ++i) {
+                    printf("Updating observer %s.\n",game->observers[i]->username);
                     sendMessageGameUpdate(game->observers[i]->fd, update);
                 }
                 simpleGamePrinting(game);
@@ -641,7 +642,7 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
 
             User* user_to_observe = NULL;
             for (int i = 0; i < MAX_CLIENTS; ++i) {
-                if (users[i]->id == obs_mes.player_to_observe_id) {
+                if (users[i] != NULL && users[i]->id == obs_mes.player_to_observe_id) {
                     user_to_observe = users[i];
                 }
             }
@@ -653,7 +654,7 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             }
 
             add_observer(source_user, user_to_observe);
-            printf("added observer %s to game of %s", source_user->username, user_to_observe->username);
+            printf("added observer %s to game of %s.\n", source_user->username, user_to_observe->username);
 
             // send first observed game info
             MessageObservationStart observation_start_message;

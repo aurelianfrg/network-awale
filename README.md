@@ -58,7 +58,7 @@ make server && make client
 Over the course of the project, we used generative AI with different purposes : 
 - To write the initial client/server structure using active polling. We had trouble using the given client/server example as many functions raised deprecation warnings and errors. So we chose to go with something more modern that we could understand better.
 - To write the `u_charlen()` function in the `tui.c` to handle the low-level byte manipulation of the unicode characters.
-- To debbug a few bugs that (despite many efforts), we could not resolve ourselves.
+- To debug a few bugs that (despite many efforts), we could not resolve ourselves.
 
 ## Misceallenous sources 
 
