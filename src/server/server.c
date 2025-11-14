@@ -82,6 +82,17 @@ void cancel_game(Game* game) {
     free(game);
 }
 
+void add_observer(User* observer, User* player_to_observe) {
+    Game * game = player_to_observe->active_game;
+    game->observers[game->observers_count] = observer;
+    game->observers_count++;
+    
+}
+
+void remove_observer(User* observer) {
+
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) {
         fprintf(stderr, "Usage: %s <port>\n", argv[0]);

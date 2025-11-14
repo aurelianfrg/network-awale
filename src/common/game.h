@@ -47,6 +47,8 @@ typedef struct Game {
     bool accepted_game;
     bool cancelled_game;
     User* players[2];      // players[TOP] and players[BOTTOM]
+    User* observers[MAX_OBSERVERS];
+    int observers_count;
     GameSnapshot snapshot;
 } Game;
 
