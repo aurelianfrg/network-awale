@@ -550,6 +550,11 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
                 update.snapshot = game->snapshot;
                 sendMessageGameUpdate(game->players[BOTTOM]->fd, update);
                 sendMessageGameUpdate(game->players[TOP]->fd, update);
+
+                // update observers 
+                for (int i = 0; i < game->observers_count; ++i) {
+                    sendMessageGameUpdate(game->observers[i]->fd, update);
+                }
                 simpleGamePrinting(game);
             }
             else {
@@ -561,11 +566,22 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
                 sendMessageGameEnd(game->players[BOTTOM]->fd, end_message);
                 sendMessageGameEnd(game->players[TOP]->fd, end_message);
 
+                // update observers 
+                for (int i = 0; i < game->observers_count; ++i) {
+                    sendMessageGameEnd(game->observers[i]->fd, end_message);
+                }
+
                 // remove active game from users
                 game->players[BOTTOM]->active_game = NULL;
                 game->players[TOP]->active_game = NULL;
                 game->players[BOTTOM]->pending_game= NULL;
                 game->players[TOP]->pending_game = NULL;
+
+                // remove observers 
+                // update observers 
+                for (int i = 0; i < game->observers_count; ++i) {
+                    game->observers[i]->observed_game = NULL;
+                }
                 free(game);
             }
             break;
@@ -620,12 +636,12 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             source_user->active_game = NULL;
             source_user->pending_game = NULL;
 
-            MessageObserve mes;
-            memcpy(&mes, message_ptr, sizeof(mes));
+            MessageObserve obs_mes;
+            memcpy(&obs_mes, message_ptr, sizeof(obs_mes));
 
             User* user_to_observe = NULL;
             for (int i = 0; i < MAX_CLIENTS; ++i) {
-                if (users[i]->id == mes.opponent_id) {
+                if (users[i]->id == obs_mes.player_to_observe_id) {
                     user_to_observe = users[i];
                 }
             }
@@ -639,6 +655,21 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             add_observer(source_user, user_to_observe);
             printf("added observer %s to game of %s", source_user->username, user_to_observe->username);
 
+        case STOP_OBSERVING:
+            printf("OBSERVE_GAME\n");
+            // check that user is indeed created
+            if (source_user == NULL) {
+                printf("error: Got a request from an unregistered user.\n");
+                return -1;
+            }
+
+            if (source_user->observed_game == NULL) {
+                printf("error: user was not spectating.\n");
+            }
+
+            remove_observer(source_user);
+        
+            break;
             
         default:
             return -1;

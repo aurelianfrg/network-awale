@@ -49,6 +49,9 @@ int isMessageComplete(int32_t message_type, ssize_t r) {
         case SPECTATOR_LEAVE:
             expected = sizeof(int32_t) + sizeof(MessageSpectatorLeave);
             break;
+        case STOP_OBSERVING:
+            expected = sizeof(int32_t);
+            break;
         default: 
             printf("error: unknown length for message of type %d.\n", message_type);
             exit(-1);
@@ -283,6 +286,12 @@ void sendMessageObserve(int fd, MessageObserve message) {
 
     send(fd, &message_with_header, sizeof(message_with_header), 0);
 }
+
+void sendMessageStopObserving(int fd) {
+    int32_t message_type = STOP_OBSERVING;
+    send(fd, &message_type, sizeof(int32_t), 0);
+}
+
 
 // void sendMessageXXX(int fd, MessageXXX message) {
 
