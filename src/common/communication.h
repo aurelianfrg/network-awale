@@ -29,6 +29,7 @@ typedef enum MessageType {
     GAME_ILLEGAL_MOVE,      // server -> client
     CHAT_MESSAGE,           // client1 -> server | server -> client2,
     OBSERVE_GAME,           // observer -> server
+    OBSERVATION_START,      // server -> observer
     STOP_OBSERVING,         // observer -> server
     SPECTATOR_JOIN,         // server -> client1 & client2
     SPECTATOR_LEAVE         // server -> client1 & client2
@@ -89,6 +90,12 @@ typedef struct MessageSpectatorLeave {
     char spectator_username[USERNAME_LENGTH];
 } MessageSpectatorLeave;
 
+typedef struct MessageObservationStart {
+    char usernames[2][USERNAME_LENGTH];
+    int32_t ids[2];
+    GameSnapshot snapshot;
+} MessageObservationStart;
+
 
 int isMessageComplete(int32_t message_type, ssize_t r);
 // returns the difference between message expected lentgh and actual received lentgh
@@ -113,7 +120,9 @@ void sendMessageMatchProposition(int fd, MessageMatchProposition message);
 void sendMessageMatchCancellation(int fd);
 
 void sendMessageChat(int fd, MessageChat message);
+
 void sendMessageObserve(int fd, MessageObserve message);
+void sendMessageObservationStart(int fd, MessageObservationStart message);
 void sendMessageStopObserving(int fd);
 void sendMessageSpectatorJoin(int fd, MessageSpectatorJoin message);
 void sendMessageSpectatorLeave(int fd, MessageSpectatorLeave message);
