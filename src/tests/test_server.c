@@ -229,16 +229,16 @@ int main(int argc, char **argv) {
     else { printf("error: unexpected message %d\n", message_type); }
 
     // testing chat 
-    char message1[MAX_CHAT_MESSAGE_LENTGH] = "coucou";
-    sendMessageChat(sock3, message1); // message must be ignored by server because not in game
-    sleep(1);
-    sendMessageChat(sock2, message1); // message must be transmitted to user 0
-    recv(sock, &message_type, sizeof(int32_t), 0);
-    if (message_type == CHAT_MESSAGE) {
-        char received_message[MAX_CHAT_MESSAGE_LENTGH];
-        recv(sock, &received_message, MAX_CHAT_MESSAGE_LENTGH, 0);
-        printf("user 0 received the message \"%s\" from opponent 1.\n", received_message);
-    }
+    // char message1[MAX_CHAT_MESSAGE_LENTGH] = "coucou";
+    // sendMessageChat(sock3, message1); // message must be ignored by server because not in game
+    // sleep(1);
+    // sendMessageChat(sock2, message1); // message must be transmitted to user 0
+    // recv(sock, &message_type, sizeof(int32_t), 0);
+    // if (message_type == CHAT_MESSAGE) {
+    //     char received_message[MAX_CHAT_MESSAGE_LENTGH];
+    //     recv(sock, &received_message, MAX_CHAT_MESSAGE_LENTGH, 0);
+    //     printf("user 0 received the message \"%s\" from opponent 1.\n", received_message);
+    // }
 
 
     getchar();

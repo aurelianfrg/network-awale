@@ -78,3 +78,6 @@ Side whoHasWon(GameSnapshot snapshot);
 // return which player has won
 
 void simpleSnapshotPrinting(GameSnapshot* snapshot);
+
+Side house_ownership(int house);
+// tell which player owns the inpu house number 

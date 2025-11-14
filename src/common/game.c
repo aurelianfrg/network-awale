@@ -23,7 +23,6 @@ Game* initGame(User * user1, User * user2) {
     // create players
     game->players[0] = user1;
     game->players[1] = user2;
-
     
     // fill houses with 4 seeds
     for (int i = 0; i < 12; ++i) {
@@ -88,9 +87,9 @@ int playMove(Game* game, Side turn, int selected_house) {
     int house_to_check = house_to_fill;
     while (capturableSeeds) {
         int seeds = game->snapshot.board.houses[house_to_check].seeds;
-        if (seeds == 2 || seeds == 3) {
+        if ( house_ownership(house_to_check) != turn && (seeds == 2 || seeds == 3) ) {
             game->snapshot.points[turn] += game->snapshot.board.houses[house_to_check].seeds;
-            game->snapshot.board.houses[house_to_fill].seeds = 0;
+            game->snapshot.board.houses[house_to_check].seeds = 0;
         }
         else {
             capturableSeeds = false;
@@ -107,6 +106,15 @@ int playMove(Game* game, Side turn, int selected_house) {
     game->snapshot.turn = !(game->snapshot.turn);
     
     return 0;
+}
+
+Side house_ownership(int house) {
+    if (house >= 0 && house <= 5) return BOTTOM;
+    else if (house >= 6 && house <= 11) return TOP; 
+    else {
+        printf("error: invalid house number %d.\n", house);
+        exit(-1);
+    }
 }
 
 void simpleGamePrinting(Game* game) {
