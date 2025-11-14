@@ -42,13 +42,13 @@ User connected_user;
 User opponent_user;
 Side opponent_user_side = 0;
 Side winning_side;
-
-// USER LIST
 GameSnapshot current_game_snapshot;
 
+// USER LIST
 int users_list_count = 0;
 char users_list_buf[MAX_CLIENTS][USERNAME_LENGTH];
 int32_t users_list_id[MAX_CLIENTS];
+char users_list_status[MAX_CLIENTS];
 
 // BUTTONS
 char game_request_selected_field = 0; // Game request popup
@@ -126,15 +126,28 @@ void frameContent(GridCharBuffer* gcbuf) {
         int i = 0;
         int row = 4;
         int col = 7;
-        drawText(gcbuf, BOTTOM_CENTER, -3, 0, "!{u}Retour Arr.!{r}: Retour | !{u}Entrée!{r}: Inviter");
+        if (users_list_status[selected_field])
+            drawText(gcbuf, BOTTOM_CENTER, -3, 0, "!{u}Retour Arr.!{r}: Retour | !{u}Entrée!{r}: Regarder");
+        else
+            drawText(gcbuf, BOTTOM_CENTER, -3, 0, "!{u}Retour Arr.!{r}: Retour | !{u}Entrée!{r}: Inviter");
         drawText(gcbuf, TOP_CENTER, 2, 0, title);
         drawText(gcbuf, TOP_LEFT, row, col, user); row++;
-        TextStyle selected_style = { mkStyleFlags(1, INVERSE), 0, 0 };
+        TextStyle in_game = { mkStyleFlags(BG_COLOR), 5, 5 };
+        TextStyle selected_style = { addStyleFlag(NO_STYLE->flags, INVERSE), 0, 0 };
+        TextStyle selected_in_game_style = { addStyleFlag(in_game.flags, INVERSE), 5, 5 };
+        TextStyle* style;
         while (i<users_list_count) {
             users_list_buf[i][99] = '\0';
             char user_pseudo[100]; strcpy(user_pseudo, users_list_buf[i]);
             sprintf(user, "%s #%d", user_pseudo, users_list_id[i]);
-            drawTextWithRawStyle(gcbuf, TOP_LEFT, row, col, user, (i==selected_field)?&selected_style:NO_STYLE);
+            if (users_list_status[i]) {
+                if (i==selected_field) style = &selected_in_game_style;
+                else style = &in_game;
+            } else {
+                if (i==selected_field) style = &selected_style;
+                else style = NO_STYLE;
+            }
+            drawTextWithRawStyle(gcbuf, TOP_LEFT, row, col, user, style);
             row++;
             if (row > gcbuf->rows-3) {
                 row = 3;
@@ -407,11 +420,16 @@ void processEvents(struct pollfd pfds[2]) {
                 else if (c==KEY_ARROW_DOWN && selected_field<field_count-1) selected_field++;
                 else if (c==KEY_BACKSPACE) changeMenu(MAIN_MENU);
                 else if (c==KEY_ENTER) {
-                    MessageMatchRequest mes = { users_list_id[selected_field] };
-                    sendMessageMatchRequest(sock, mes);
-                    opponent_user.id = users_list_id[selected_field];
-                    strcpy(opponent_user.username, users_list_buf[selected_field]);
-                    is_waiting_for_game_response = 1;
+                    if (users_list_status[selected_field]) {
+                        MessageObserve mes = { users_list_id[selected_field] };
+                    }
+                    else {
+                        MessageMatchRequest mes = { users_list_id[selected_field] };
+                        sendMessageMatchRequest(sock, mes);
+                        opponent_user.id = users_list_id[selected_field];
+                        strcpy(opponent_user.username, users_list_buf[selected_field]);
+                        is_waiting_for_game_response = 1;
+                    }
                 }
                 break;
             
@@ -489,6 +507,7 @@ void processEvents(struct pollfd pfds[2]) {
             if (user_count > 0) {
                 recieve_from_server(users_list_buf, sizeof(char)*user_count*USERNAME_LENGTH);
                 recieve_from_server(users_list_id, sizeof(int32_t)*user_count);
+                recieve_from_server(users_list_status, sizeof(char)*user_count);
             }
             is_waiting = 0;
             changeMenu(USER_LIST_MENU);
@@ -523,7 +542,7 @@ void processEvents(struct pollfd pfds[2]) {
                 changeMenu(IN_GAME_MENU);
             }
             else {
-                changeMenu(MAIN_MENU);
+                if (navigationState == IN_GAME_MENU || navigationState == GAME_END_MENU) changeMenu(MAIN_MENU);
                 is_chat_open = 0;
                 is_notified = 1;
                 strcpy(notification_message, "Partie refusée");
