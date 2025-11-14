@@ -616,7 +616,7 @@ size_t u_charlen(unsigned char *s)
     else if ((c >> 3) == 0x1E) // 11110xxx → 4 octets
         return (size_t)4;
     else
-        return (size_t)1;  // caractère invalide ou continuation → on renvoie 0 par défaut
+        return (size_t)1;  // caractère invalide ou continuation → on renvoie 1 par défaut
 }
 
 int isAlpha(int c) {

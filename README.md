@@ -1,44 +1,70 @@
 # network-awale - A Client Server Awale game in C (with sockets)
-## Objectives
 
-The goal of this project is to implement an Awalé game server. The aim is to have a client/server application that allows clients to play matches, verify that the rules are correctly applied, communicate, and keep traces (scores, games played, etc.).
+Authors : DESNOT Anatole, FRANGIN Aurélian
 
-The project is incremental, you can add features to your application as your implementation progresses, spectating a game, organizing tournaments, group chats, logging conversations, end-to-end encryption. The only limits are your imagination and the time you dedicate.
 
-Your work will be evaluated with a demonstration (plan ~10 minutes) and with the code you submit during the last session. Prioritize a robust application that works rather than many non-working features. Code scalability/extensibility is also evaluated, is it easy to add new features?
+## Features
 
-## Description of the expected work
+Features implemented consist in : 
+- A single-thread multi-connection server with extensive logging
+- Multiple simultaneous independant games. 
+- A client using a pretty terminal user interface (TUI) made from a personnalized library
+- Register with a username 
+- List every connected players
+- Send a game invite to any connected user, who may accept or decline. Acceptance results in game initialization.
+- Play a move in a started game.
+- Chat with the opponent during a game.
+- Disconnection of an user results in termination of any game or game invite, allowing the opponenent to start other games.
 
-You will implement your solution incrementally. It is essential to think carefully about architectural aspects before you start coding, what happens on the server? on the clients? what is your communication policy? What are the different protocols, for matches, for chats, etc.? How can clients call/challenge one another (by username only? otherwise?)? What choices ensure your code remains scalable or extensible? Application testing is important, what happens if a client disconnects? Can they recover the game? etc.
+## Implementation
 
-You can start from the example given in Lecture 1 where the server re-broadcasts to all clients a message sent by one client, [Client Server V2 in Examples, Lecture 1](https://moodle.insa-lyon.fr/mod/resource/view.php?id=203926)
+#### Client interface
+The client interface is a custom Terminal User Interface library made specifically for this project. It is located in the `tui.c` and `tui.h` files. It uses escape sequences to send commands, style, and text to the terminal. It supports bold, italic, underline, faint, inverse, strikethrough, background & foreground color (256 colors), any UTF-8 character, and uses a custom markup language for styling the text. The interface supports zooming and resizing (listening the `SIGWINCH` signal). 
 
-## The Awalé game
+The frame is drawn using a custom datastructure optimized for size: the *GridCharBuffer* (or gcbuf). It divides the terminal in a grid. Each terminal cell has a background & foreground color, a 4-byte buffer for any Unicode char, and 8 style flags (1 bit each). The grid is filled by coordinate (like pixels). At the end a the frame, an algorithms computes the minimum buffer size needed to print this frame, mallocs a char buffer of the right size, fills it and flushes it to the terminal in a single write call.
 
-The rules of Awalé are simple and can be found here, Wikipedia article Awalé.
+Many functions have been made to abstract the complexity of the *GridCharBuffer*. They are named `drawXXX`. They allow for responsive positioning (with anchor points like center, top-left, bottom-center, etc...), offsetting, and custom style. 
 
-You must implement this game, represent the board, check move legality, and determine the winner. You should also be able to save and broadcast match sessions, to players and, for example, to spectators. A simple ASCII output is sufficient (a nice GUI could be built on top, but that is not the goal of this project).
+#### Communication protocol
+The entire communication protocol is specified in the communication package.
 
-## Implementation guideline
+Single messages are always sent in a single TCP package. They consist in a 32 bit integer header, indicating the message type. The message body differs depending on the message type. Agreement between client and server is guaranteed by the common *communication.h* header.
 
-0. Implement the Awalé game: internal representation, how to play a move, count points, save a game, print the board state, etc.
-1. Design a client/server application. Each client registers with a username.
-2. Each client can request from the server the list of online usernames.
-3. Client A can challenge client B. B can accept or refuse.
-4. When a match is created between A and B, the server randomly decides who starts. The server verifies the legality of moves (using the code created in step 0).
-5. If you have a working version for one game, ensure it also works for multiple simultaneous games. You can add features such as listing ongoing games and an “observer” mode where the server sends the board and score to C who observes the game between A and B.
-6. Implement a chat option, in addition to sending moves, players can exchange messages to chat (both inside and outside a game).
-7. Allow a player to write a bio, say 10 ASCII lines to introduce themselves. The server should be able to display the bio of a given username.
-7. Add a private mode, a player can limit the list of spectators to a list of friends. Implement this feature.
-9. Add the ability to save played games so they can be reviewed later.
-10. Free to your imagination, player rankings (Wikipedia article on Elo rating), tournament organization, adapting it to another game, etc.
+Inside of the server and clients, communication is handled with active polling, allowing for always-responsive  single-thread programs.
 
-## Programming environment
+## How to run
 
-The program will be written in C. Distribute your functions across multiple files and provide a Makefile for compilation. Carefully choose your data structures. You can start from the examples seen in previous TPs or in class. The goal is to create a server that allows two clients to play a game of Awalé. The server checks move validity and counts points.
+You must have `make` and `gcc` in order to compile the code. The programs have only been tested on *Linux* and *WSL*, there may be errors when using other environments.
 
-Start from an existing client-server base (from the previous TP or by reusing the example mentioned above).
+The two compilation targets are `server` and `client`. Thus, you must run `make server` and `make client`.
 
-Submit all the source files necessary for compilation along with instructions on how to compile. Also include a user manual (which features are implemented and how to use them for both the client and the server). Send everything by email to frederic.prost@insa-lyon.fr with the subject line [4IF-PR-TP-CR].
+The binaries are placed in `./bin`. In order to run them, you can navigate to that directory or run them from their path. 
 
-A 10-minute presentation is expected during the last session.
+`server` takes one argument: the port to bind (*ex. 5050*). \
+`client` takes two arguments: the server ip (*ex. 127.0.0.1*). \
+The server must be run before the client.
+
+```bash
+# At project root
+make server && make client
+./bin/server 5050
+
+# In a second terminal, at project root
+./bin/client 127.0.0.1 5050
+```
+
+## AI usage
+
+écrit par IA
+- structure du client 
+- structure du server
+- fonction u_charlen() de tui.c
+- débugger un bug chelou du chat dans client.c
+
+Over the course of the project, we used generative AI with different purposes : 
+- to write the initial client/server structure using active polling. We had trouble understanding the given client/server example, so we chose to go with something we could better understand.
+
+
+## Misceallenous sources 
+
+tui blog source 

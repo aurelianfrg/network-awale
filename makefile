@@ -1,3 +1,8 @@
+# ==========================================================
+# === Generic makefile template for C / C++ projects =======
+# === Author : Aurélian FRANGIN ============================
+# ==========================================================
+
 # ================= Options de compilation =================
 GCC = gcc
 CCFLAGS = -ansi -pedantic -Wall -std=c17 -g #-g -D MAP
