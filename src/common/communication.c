@@ -167,16 +167,22 @@ void sendMessageGetUserList(int fd) {
     send(fd, &message_type, sizeof(message_type), 0);
 }
 
-void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int32_t user_ids[MAX_CLIENTS], int32_t usernames_count) {
+void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int32_t user_ids[MAX_CLIENTS], int32_t usernames_count, char in_game[MAX_CLIENTS]) {
+
     // send number of users, then usernames, then ids
     int32_t message_type = SEND_USER_LIST;
 
     ssize_t message_length = sizeof(message_type) * 2 + usernames_count*USERNAME_LENGTH*sizeof(char) + sizeof(usernames_count)*usernames_count;
     char* buffer = calloc(1, message_length);
-    memcpy(buffer, &message_type, sizeof(message_type));
-    memcpy(buffer+sizeof(message_type), &usernames_count, sizeof(usernames_count));
-    memcpy(buffer+sizeof(message_type)+sizeof(usernames_count), usernames, usernames_count*USERNAME_LENGTH*sizeof(char));
-    memcpy(buffer+sizeof(message_type)+sizeof(usernames_count)+usernames_count*USERNAME_LENGTH*sizeof(char), user_ids, sizeof(int32_t)*usernames_count);
+    char* writing_adress = buffer;
+    memcpy(writing_adress, &message_type, sizeof(message_type));
+    writing_adress += sizeof(message_type);
+    memcpy(writing_adress, &usernames_count, sizeof(usernames_count));
+    writing_adress += sizeof(usernames_count);
+    memcpy(writing_adress, usernames, usernames_count*USERNAME_LENGTH*sizeof(char));
+    writing_adress += usernames_count*USERNAME_LENGTH*sizeof(char);
+    memcpy(writing_adress, user_ids, sizeof(int32_t)*usernames_count);
+    writing_adress += sizeof(int32_t)*usernames_count;
 
     send(fd, buffer, message_length, 0);
 }

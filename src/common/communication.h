@@ -20,14 +20,17 @@ typedef enum MessageType {
     SEND_USER_LIST,         // server -> client
     MATCH_REQUEST,          // client1 -> server
     MATCH_PROPOSITION,      // server -> client2
-    MATCH_RESPONSE,         // client2 -> server | server -> client1
+    MATCH_RESPONSE,         // client2 -> server | server -> client1 | server -> observer
     MATCH_CANCELLATION,     // client1 -> server | server -> client
     GAME_START,             // server -> client1 & client2
     GAME_UPDATE,            // server -> client
     GAME_END,               // server -> client
     GAME_MOVE,              // client -> server
     GAME_ILLEGAL_MOVE,      // server -> client
-    CHAT_MESSAGE            // client1 -> server | server -> client2
+    CHAT_MESSAGE,           // client1 -> server | server -> client2,
+    OBSERVE_GAME,           // observer -> server
+    SPECTATOR_JOIN,         // server -> client1 & client2
+    SPECTATOR_LEAVE         // server -> client1 & client2
 } MessageType;
 
 
@@ -73,6 +76,9 @@ typedef struct MessageChat {
     int32_t user_id;
 } MessageChat;
 
+typedef struct MessageObserve {
+    int32_t player_to_observe_id;
+} MessageObserve;
 
 
 
@@ -92,10 +98,11 @@ void sendMessageGameMove(int fd, MessageGameMove message);
 void sendMessageGameIllegalMove(int fd);
 
 void sendMessageGetUserList(int fd);
-void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int32_t user_ids[MAX_CLIENTS], int32_t usernames_count);
+void sendUserList(int fd, char usernames[MAX_CLIENTS][USERNAME_LENGTH], int32_t user_ids[MAX_CLIENTS], int32_t usernames_count, char in_game[MAX_CLIENTS]);
 
 void sendMessageMatchResponse(int fd, int response);
 void sendMessageMatchProposition(int fd, MessageMatchProposition message);
 void sendMessageMatchCancellation(int fd);
 
 void sendMessageChat(int fd, MessageChat message);
+void sendMessageObserve(int fd, MessageObserve message);
