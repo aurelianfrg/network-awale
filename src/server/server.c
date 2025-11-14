@@ -86,11 +86,16 @@ void add_observer(User* observer, User* player_to_observe) {
     Game * game = player_to_observe->active_game;
     game->observers[game->observers_count] = observer;
     game->observers_count++;
-    
+    observer->observed_game = game;
+
+    MessageSpectatorJoin mes;
+    strcpy(mes.spectator_username, observer->username);
+    sendMessageSpectatorJoin(game->players[BOTTOM]->fd, mes);
+    sendMessageSpectatorJoin(game->players[TOP]->fd, mes);
 }
 
 void remove_observer(User* observer) {
-
+    
 }
 
 int main(int argc, char **argv) {
