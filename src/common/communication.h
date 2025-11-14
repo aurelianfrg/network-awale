@@ -84,10 +84,12 @@ typedef struct MessageObserve {
 
 typedef struct MessageSpectatorJoin {
     char spectator_username[USERNAME_LENGTH];
+    int32_t spectator_id;
 } MessageSpectatorJoin;
 
 typedef struct MessageSpectatorLeave {
     char spectator_username[USERNAME_LENGTH];
+    int32_t spectator_id;
 } MessageSpectatorLeave;
 
 typedef struct MessageObservationStart {

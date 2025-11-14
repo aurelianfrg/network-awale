@@ -94,8 +94,10 @@ void add_observer(User* observer, User* player_to_observe) {
 
     MessageSpectatorJoin mes;
     strcpy(mes.spectator_username, observer->username);
+    mes.spectator_id = observer->id;
     sendMessageSpectatorJoin(game->players[BOTTOM]->fd, mes);
     sendMessageSpectatorJoin(game->players[TOP]->fd, mes);
+    // Ajouter aussi le messages pour les autres spectateurs
 }
 
 void remove_observer(User* observer) {
@@ -108,8 +110,10 @@ void remove_observer(User* observer) {
 
             MessageSpectatorLeave mes;
             strcpy(mes.spectator_username, observer->username);
+            mes.spectator_id = observer->id;
             sendMessageSpectatorLeave(game->players[BOTTOM]->fd, mes);
             sendMessageSpectatorLeave(game->players[TOP]->fd, mes);
+            // Ajouter aussi le messages pour les autres spectateurs
             break;
         }
     }    
