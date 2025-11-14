@@ -392,7 +392,7 @@ int getCellCharSize(CellChar* cell_char) {
 void flushFrame(GridCharBuffer* gcbuf) {
     // Compute char_buf byte size and malloc
     int BUFFER_START_OVERHEAD_COST = 13;
-    int BUFFER_END_OVERHEAD_COST = 30;
+    int BUFFER_END_OVERHEAD_COST = 35;
     int ROW_OVERHEAD_COST = 5;
     char BUFFER_START_OVERHEAD_VAL[BUFFER_START_OVERHEAD_COST+1];
     char BUFFER_END_OVERHEAD_VAL[BUFFER_END_OVERHEAD_COST+1];
@@ -616,7 +616,7 @@ size_t u_charlen(unsigned char *s)
     else if ((c >> 3) == 0x1E) // 11110xxx → 4 octets
         return (size_t)4;
     else
-        return (size_t)0;  // caractère invalide ou continuation → on renvoie 0 par défaut
+        return (size_t)1;  // caractère invalide ou continuation → on renvoie 0 par défaut
 }
 
 int isAlpha(int c) {

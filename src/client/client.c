@@ -162,9 +162,14 @@ void frameContent(GridCharBuffer* gcbuf) {
         drawText(gcbuf, CENTER, 7, 0, general_display_buf);
         sprintf(general_display_buf, "%d points", current_game_snapshot.points[connected_user_side]);
         drawText(gcbuf, CENTER, 8, 0, general_display_buf);
-        drawButton(gcbuf, BOTTOM_CENTER, -2, 0, "Retour", 13, selected_field==IG_BACK_BUTTON);
+        drawText(gcbuf, BOTTOM_CENTER, -5, 0, "!{u}C!{r}: Ouvrir le chat");
+        if (unread_chat_messages) {
+            sprintf(general_display_buf, "%d messages non lus", unread_chat_messages);
+            drawText(gcbuf, BOTTOM_CENTER, -4, 0, general_display_buf);
+        }
 
         if (is_chat_open) {
+            unread_chat_messages = 0;
             int chat_width = gcbuf->cols-15;
             int chat_height = gcbuf->rows-6;
             int max_chat_rows_displayed = (chat_height-4);
