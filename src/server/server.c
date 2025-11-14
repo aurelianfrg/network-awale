@@ -657,8 +657,8 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
 
             // send first observed game info
             MessageObservationStart observation_start_message;
-            strcpy(observation_start_message.usernames[BOTTOM], source_user->observed_game->players[BOTTOM]);
-            strcpy(observation_start_message.usernames[TOP], source_user->observed_game->players[TOP]);
+            strcpy(observation_start_message.usernames[BOTTOM], source_user->observed_game->players[BOTTOM]->username);
+            strcpy(observation_start_message.usernames[TOP], source_user->observed_game->players[TOP]->username);
             observation_start_message.ids[BOTTOM] = source_user->observed_game->players[BOTTOM]->id;
             observation_start_message.ids[TOP] = source_user->observed_game->players[TOP]->id;
             observation_start_message.snapshot = source_user->observed_game->snapshot;
