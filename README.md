@@ -15,6 +15,7 @@ Features implemented consist in :
 - Play a move in a started game.
 - Chat with the opponent during a game.
 - Disconnection of an user results in termination of any game or game invite, allowing the opponenent to start other games.
+- Spectate any game, interact in chat as spectator.
 
 ## Implementation
 
