@@ -101,7 +101,7 @@ void add_observer(User* observer, User* player_to_observe) {
 }
 
 void remove_observer(User* observer) {
-    Game * game = observer->active_game;
+    Game * game = observer->observed_game;
     for (int i = 0; i < MAX_OBSERVERS; ++i) {
         if (game->observers[i] == observer) {
             game->observers[i] = NULL;
@@ -683,7 +683,8 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             if (source_user->observed_game == NULL) {
                 printf("error: user was not spectating.\n");
             }
-
+            
+            printf("Ending observation from user %s.\n", source_user->username);
             remove_observer(source_user);
         
             break;
