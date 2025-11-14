@@ -17,8 +17,9 @@ typedef struct House {
 } House;
 
 typedef enum Side {
-    BOTTOM,
-    TOP
+    BOTTOM = 0,
+    TOP = 1,
+    NO_SIDE,
 } Side;
 
 typedef struct User {

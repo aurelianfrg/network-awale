@@ -24,9 +24,11 @@ char is_waiting_for_game_response = 0;
 char is_game_request_pending = 0;
 char is_chat_open = 0;
 
-// USER CREATION
+// USER
 char _user_pseudo_buf[USERNAME_LENGTH];
 u_string user_pseudo = { _user_pseudo_buf, 0, 0 };
+Side connected_user_side = 0;
+User connected_user;
 
 // CHAT
 #define CHAT_HISTORY_LENGTH 100
@@ -37,10 +39,10 @@ char _chat_message_buf[MAX_CHAT_MESSAGE_LENTGH];
 u_string chat_message = { _chat_message_buf, 0, 0 };
 
 // GAME
-Side connected_user_side = 0;
-User connected_user;
-User opponent_user;
-Side opponent_user_side = 0;
+User player_1;
+User player_2;
+Side player_1_side = 0;
+Side player_2_side = 0;
 Side winning_side;
 GameSnapshot current_game_snapshot;
 
@@ -161,20 +163,39 @@ void frameContent(GridCharBuffer* gcbuf) {
         hideCursor();
         TextStyle top_style = { mkStyleFlags(1, FAINT), 0, 0 };
         TextStyle bot_style = { 0, 0, 0 };
-        if (current_game_snapshot.turn==connected_user_side)
-            drawText(gcbuf, TOP_CENTER, 1, 0, "!{vF004}Votre tour");
-        else 
-            drawText(gcbuf, TOP_CENTER, 1, 0, "!{vF004}Tour de l'adversaire");
 
         drawAwaleBoard(gcbuf, CENTER, 0, 0, &top_style, &bot_style);
-        sprintf(general_display_buf, "Opposant: !{u}%s #%d!{r}", opponent_user.username, opponent_user.id);
-        drawText(gcbuf, CENTER, -8, 0, general_display_buf);
-        sprintf(general_display_buf, "%d points", current_game_snapshot.points[opponent_user_side]);
-        drawText(gcbuf, CENTER, -7, 0, general_display_buf);
-        sprintf(general_display_buf, "Vous: !{u}%s #%d!{r}", connected_user.username, connected_user.id);
-        drawText(gcbuf, CENTER, 7, 0, general_display_buf);
-        sprintf(general_display_buf, "%d points", current_game_snapshot.points[connected_user_side]);
-        drawText(gcbuf, CENTER, 8, 0, general_display_buf);
+        if (player_1.id == connected_user.id) {
+            if (current_game_snapshot.turn==player_1_side)
+                drawText(gcbuf, TOP_CENTER, 1, 0, "!{vF004}Votre tour");
+            else 
+                drawText(gcbuf, TOP_CENTER, 1, 0, "!{vF004}Tour de l'adversaire");
+            sprintf(general_display_buf, "Opposant: !{u}%s #%d!{r}", player_2.username, player_2.id);
+            drawText(gcbuf, CENTER, -8, 0, general_display_buf);
+            sprintf(general_display_buf, "%d points", current_game_snapshot.points[player_2_side]);
+            drawText(gcbuf, CENTER, -7, 0, general_display_buf);
+            sprintf(general_display_buf, "Vous: !{u}%s #%d!{r}", connected_user.username, connected_user.id);
+            drawText(gcbuf, CENTER, 7, 0, general_display_buf);
+            sprintf(general_display_buf, "%d points", current_game_snapshot.points[connected_user_side]);
+            drawText(gcbuf, CENTER, 8, 0, general_display_buf);
+        } 
+        else {
+            if (current_game_snapshot.turn==player_1_side)
+                sprintf(general_display_buf, "Tour de !{u}%s #%d", player_1.username, player_1.id);
+            else
+                sprintf(general_display_buf, "Tour de !{u}%s #%d", player_2.username, player_2.id);
+            drawText(gcbuf, TOP_CENTER, 1, 0, general_display_buf);
+
+            sprintf(general_display_buf, "!{u}%s #%d!{r}", player_2.username, player_2.id);
+            drawText(gcbuf, CENTER, -8, 0, general_display_buf);
+            sprintf(general_display_buf, "%d points", current_game_snapshot.points[player_2_side]);
+            drawText(gcbuf, CENTER, -7, 0, general_display_buf);
+            sprintf(general_display_buf, "!{u}%s #%d!{r}", player_1.username, player_1.id);
+            drawText(gcbuf, CENTER, 7, 0, general_display_buf);
+            sprintf(general_display_buf, "%d points", current_game_snapshot.points[player_1_side]);
+            drawText(gcbuf, CENTER, 8, 0, general_display_buf);
+        }
+        
         drawText(gcbuf, BOTTOM_CENTER, -5, 0, "!{u}C!{r}: Ouvrir le chat");
         drawButton(gcbuf, BOTTOM_CENTER, -2, 0, "Retour", BACK_COLOR, selected_field==IG_BACK_BUTTON);
         if (unread_chat_messages) {
@@ -256,22 +277,44 @@ void frameContent(GridCharBuffer* gcbuf) {
     case GAME_END_MENU:
         hideCursor();
         TextStyle faint_style = { mkStyleFlags(1, FAINT), 0, 0 };
-        if (winning_side==connected_user_side)
-            drawPopup(gcbuf, CENTER, -10, 0, NO_STYLE, 13, 1, "Victoire !");
-        else
-            drawPopup(gcbuf, CENTER, -10, 0, NO_STYLE, 13, 1, "Défaite :(");
 
-        // Points
-        sprintf(general_display_buf, "Opposant: !{u}%s #%d!{r}", opponent_user.username, opponent_user.id);
-        drawText(gcbuf, CENTER, -6, 20, general_display_buf);
-        sprintf(general_display_buf, "%d points", current_game_snapshot.points[opponent_user_side]);
-        drawText(gcbuf, CENTER, -5, 20, general_display_buf);
-        sprintf(general_display_buf, "Vous: !{u}%s #%d!{r}", connected_user.username, connected_user.id);
-        drawText(gcbuf, CENTER, -6, -20, general_display_buf);
-        sprintf(general_display_buf, "%d points", current_game_snapshot.points[connected_user_side]);
-        drawText(gcbuf, CENTER, -5, -20, general_display_buf);
-        drawAwaleBoard(gcbuf, CENTER, 4, 0, &faint_style, &faint_style);
-        drawButton(gcbuf, BOTTOM_CENTER, -3, 0, "Retourner à l'accueil", 13, 1);
+        if (player_1.id == connected_user.id) {
+            if (winning_side==player_1_side)
+                drawPopup(gcbuf, CENTER, -10, 0, NO_STYLE, 13, 1, "Victoire !");
+            else
+                drawPopup(gcbuf, CENTER, -10, 0, NO_STYLE, 13, 1, "Défaite :(");
+
+            // Points
+            sprintf(general_display_buf, "Opposant: !{u}%s #%d!{r}", player_2.username, player_2.id);
+            drawText(gcbuf, CENTER, -6, 20, general_display_buf);
+            sprintf(general_display_buf, "%d points", current_game_snapshot.points[player_2_side]);
+            drawText(gcbuf, CENTER, -5, 20, general_display_buf);
+            sprintf(general_display_buf, "Vous: !{u}%s #%d!{r}", player_1.username, player_1.id);
+            drawText(gcbuf, CENTER, -6, -20, general_display_buf);
+            sprintf(general_display_buf, "%d points", current_game_snapshot.points[player_1_side]);
+            drawText(gcbuf, CENTER, -5, -20, general_display_buf);
+            drawAwaleBoard(gcbuf, CENTER, 4, 0, &faint_style, &faint_style);
+            drawButton(gcbuf, BOTTOM_CENTER, -3, 0, "Retourner à l'accueil", 13, 1);
+        } 
+        else {
+            if (winning_side==player_1_side)
+                sprintf(general_display_buf, "Victoire de !{u}%s #%d", player_1.username, player_1.id);
+            else
+                sprintf(general_display_buf, "Victoire de !{u}%s #%d", player_2.username, player_2.id);
+            drawPopup(gcbuf, CENTER, -10, 0, NO_STYLE, u_strlen(general_display_buf)+2, 1, general_display_buf);
+
+            // Points
+            sprintf(general_display_buf, "!{u}%s #%d!{r}", player_2.username, player_2.id);
+            drawText(gcbuf, CENTER, -6, 20, general_display_buf);
+            sprintf(general_display_buf, "%d points", current_game_snapshot.points[player_2_side]);
+            drawText(gcbuf, CENTER, -5, 20, general_display_buf);
+            sprintf(general_display_buf, "!{u}%s #%d!{r}", player_1.username, player_1.id);
+            drawText(gcbuf, CENTER, -6, -20, general_display_buf);
+            sprintf(general_display_buf, "%d points", current_game_snapshot.points[player_1_side]);
+            drawText(gcbuf, CENTER, -5, -20, general_display_buf);
+            drawAwaleBoard(gcbuf, CENTER, 4, 0, &faint_style, &faint_style);
+            drawButton(gcbuf, BOTTOM_CENTER, -3, 0, "Retourner à l'accueil", 13, 1);
+        }
         break;
     
     default:
@@ -285,7 +328,7 @@ void frameContent(GridCharBuffer* gcbuf) {
     }
 
     if (is_game_request_pending) {
-        sprintf(general_display_buf, "%s #%d", opponent_user.username, opponent_user.id);
+        sprintf(general_display_buf, "%s #%d", player_2.username, player_2.id);
         drawPopup(gcbuf, CENTER, 0, 0, NO_STYLE, 45, 3, "");
         drawText(gcbuf, CENTER, -1, 0, "Vous avez été invité à jouer contre");
         drawText(gcbuf, CENTER, 0, 0, general_display_buf);
@@ -294,7 +337,7 @@ void frameContent(GridCharBuffer* gcbuf) {
     }
 
     if (is_waiting_for_game_response) {
-        sprintf(general_display_buf, "%s #%d", opponent_user.username, opponent_user.id);
+        sprintf(general_display_buf, "%s #%d", player_2.username, player_2.id);
         drawPopup(gcbuf, CENTER, 0, 0, NO_STYLE, 45, 3, "");
         drawText(gcbuf, CENTER, -1, 0, "En attente d'une réponse de");
         drawText(gcbuf, CENTER, 0, 0, general_display_buf);
@@ -422,12 +465,14 @@ void processEvents(struct pollfd pfds[2]) {
                 else if (c==KEY_ENTER) {
                     if (users_list_status[selected_field]) {
                         MessageObserve mes = { users_list_id[selected_field] };
+                        sendMessageObserve(sock, mes);
+                        is_waiting = 1;
                     }
                     else {
                         MessageMatchRequest mes = { users_list_id[selected_field] };
                         sendMessageMatchRequest(sock, mes);
-                        opponent_user.id = users_list_id[selected_field];
-                        strcpy(opponent_user.username, users_list_buf[selected_field]);
+                        player_2.id = users_list_id[selected_field];
+                        strcpy(player_2.username, users_list_buf[selected_field]);
                         is_waiting_for_game_response = 1;
                     }
                 }
@@ -514,8 +559,8 @@ void processEvents(struct pollfd pfds[2]) {
             break;
 
         case MATCH_PROPOSITION:
-            recieve_from_server(&(opponent_user.id), sizeof(int32_t));
-            recieve_from_server(&(opponent_user.username), sizeof(char)*USERNAME_LENGTH);
+            recieve_from_server(&(player_2.id), sizeof(int32_t));
+            recieve_from_server(&(player_2.username), sizeof(char)*USERNAME_LENGTH);
             is_game_request_pending = 1;
             game_request_selected_field = 0;
             break;
@@ -552,12 +597,16 @@ void processEvents(struct pollfd pfds[2]) {
             break;
 
         case GAME_START:
+            // Only recevied if connected_user is a player
             changeMenu(IN_GAME_MENU);
             is_waiting = 0;
             is_waiting_for_game_response = 0;
-            recieve_from_server(&(opponent_user.username), sizeof(char)*USERNAME_LENGTH);
+            recieve_from_server(&(player_2.username), sizeof(char)*USERNAME_LENGTH);
             recieve_from_server(&connected_user_side, sizeof(int32_t));
-            opponent_user_side = !connected_user_side;
+            player_1_side = connected_user_side;
+            player_1.id = connected_user.id;
+            strcpy(player_1.username, connected_user.username);
+            player_2_side = !player_1_side;
             recieve_from_server(&current_game_snapshot, sizeof(GameSnapshot));
             break;
 
@@ -708,7 +757,7 @@ void drawAwaleBoard(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int of
     TextStyle* drawnStyle;
     // TOP HOUSES
     for (int i=0; i<6; i++) {
-        unsigned int seedCount = (opponent_user_side==TOP)?
+        unsigned int seedCount = (player_2_side==TOP)?
             current_game_snapshot.board.houses[11-i].seeds:
             current_game_snapshot.board.houses[5-i].seeds;
         drawAwaleHouse(
@@ -722,7 +771,7 @@ void drawAwaleBoard(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int of
         if (current_game_snapshot.turn != connected_user_side) drawnStyle = top_style;
         else if (selected_awale_house == i && selected_field==IG_AWALE_HOUSE) drawnStyle = &bot_style_selected;
         else drawnStyle = bot_style;
-        unsigned int seedCount = (connected_user_side==BOTTOM)?
+        unsigned int seedCount = (player_1_side==BOTTOM)?
             current_game_snapshot.board.houses[i].seeds:
             current_game_snapshot.board.houses[i+6].seeds;
         drawAwaleHouse(
