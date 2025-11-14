@@ -16,6 +16,7 @@
         pkgs.libgcc
         pkgs.gnumake
         pkgs.gdb
+        pkgs.valgrind-light
         # Add other C development packages as needed
       ];
       shellHook = ''
