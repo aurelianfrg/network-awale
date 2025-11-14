@@ -292,6 +292,19 @@ void sendMessageStopObserving(int fd) {
     send(fd, &message_type, sizeof(int32_t), 0);
 }
 
+void sendMessageObservationStart(int fd, MessageObservationStart message) {
+    typedef struct MessageWithHeader {
+        int32_t message_type;
+        MessageObservationStart message;
+    } MessageWithHeader;
+
+    MessageWithHeader message_with_header;
+    message_with_header.message_type = OBSERVATION_START;
+    message_with_header.message = message;
+
+    send(fd, &message_with_header, sizeof(message_with_header), 0);
+}
+
 
 // void sendMessageXXX(int fd, MessageXXX message) {
 

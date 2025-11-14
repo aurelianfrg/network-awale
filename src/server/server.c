@@ -655,6 +655,18 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             add_observer(source_user, user_to_observe);
             printf("added observer %s to game of %s", source_user->username, user_to_observe->username);
 
+            // send first observed game info
+            MessageObservationStart observation_start_message;
+            strcpy(observation_start_message.usernames[BOTTOM], source_user->observed_game->players[BOTTOM]);
+            strcpy(observation_start_message.usernames[TOP], source_user->observed_game->players[TOP]);
+            observation_start_message.ids[BOTTOM] = source_user->observed_game->players[BOTTOM]->id;
+            observation_start_message.ids[TOP] = source_user->observed_game->players[TOP]->id;
+            observation_start_message.snapshot = source_user->observed_game->snapshot;
+
+            sendMessageObservationStart(source_user->fd, observation_start_message);
+
+            break;
+
         case STOP_OBSERVING:
             printf("OBSERVE_GAME\n");
             // check that user is indeed created
