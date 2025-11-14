@@ -607,7 +607,12 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
 
                 printf("user %s sent message \"%s\".\n", source_user->username, chat_message.message);
 
-                game = source_user->active_game;
+                if (source_user->active_game != NULL) {
+                    game = source_user->active_game;
+                }
+                else if (source_user->observed_game != NULL) {
+                    game = source_user->observed_game;
+                }
                 // redirect message to opponent
                 if (source_user != game->players[BOTTOM]) {
                     sendMessageChat(game->players[BOTTOM]->fd, chat_message);
