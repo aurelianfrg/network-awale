@@ -1,6 +1,6 @@
 # network-awale - A Client Server Awale game in C (with sockets)
 
-Authors : DESNOT Anatole, FRANGIN Aurélian
+*Authors :* DESNOT Anatole, FRANGIN Aurélian
 
 
 ## Features
@@ -23,14 +23,14 @@ The client interface is a custom Terminal User Interface library made specifical
 
 The frame is drawn using a custom datastructure optimized for size: the *GridCharBuffer* (or gcbuf). It divides the terminal in a grid. Each terminal cell has a background & foreground color, a 4-byte buffer for any Unicode char, and 8 style flags (1 bit each). The grid is filled by coordinate (like pixels). At the end a the frame, an algorithms computes the minimum buffer size needed to print this frame, mallocs a char buffer of the right size, fills it and flushes it to the terminal in a single write call.
 
-Many functions have been made to abstract the complexity of the *GridCharBuffer*. They are named `drawXXX`. They allow for responsive positioning (with anchor points like center, top-left, bottom-center, etc...), offsetting, and custom style. 
+Many functions have been made to abstract the complexity of the *GridCharBuffer*. They are named `drawXXX`. They allow for responsive positioning (with anchor points like center, top-left, bottom-center, etc...), offsetting, and custom style. Any text can use a custom-made markup language for inline styling.
 
 #### Communication protocol
-The entire communication protocol is specified in the communication package.
+The entire communication protocol is specified in the communication package (`communication.c` and `communication.h`).
 
-Single messages are always sent in a single TCP package. They consist in a 32 bit integer header, indicating the message type. The message body differs depending on the message type. Agreement between client and server is guaranteed by the common *communication.h* header.
+Each message is sent in a single TCP package. They consist of a 32 bit integer header, indicating the message type. And a body of which size depends on the message type. Agreement between client and server is guaranteed by the common *communication.h* header. To parse an incoming message, the programs reads the 32 first bits of the recieved data to get the type and interprets the following bytes depending on this information.
 
-Inside of the server and clients, communication is handled with active polling, allowing for always-responsive  single-thread programs.
+Inside the server and clients, communication is handled with active polling, allowing for always-responsive single-thread programs. Everything is placed in an event-loop using `poll` on the sockets file descriptor and stdin. 
 
 ## How to run
 
@@ -55,16 +55,11 @@ make server && make client
 
 ## AI usage
 
-écrit par IA
-- structure du client 
-- structure du server
-- fonction u_charlen() de tui.c
-- débugger un bug chelou du chat dans client.c
-
 Over the course of the project, we used generative AI with different purposes : 
-- to write the initial client/server structure using active polling. We had trouble understanding the given client/server example, so we chose to go with something we could better understand.
-
+- To write the initial client/server structure using active polling. We had trouble using the given client/server example as many functions raised deprecation warnings and errors. So we chose to go with something more modern that we could understand better.
+- To write the `u_charlen()` function in the `tui.c` to handle the low-level byte manipulation of the unicode characters.
+- To debbug a few bugs that (despite many efforts), we could not resolve ourselves.
 
 ## Misceallenous sources 
 
-tui blog source 
+The TUI library was made possible thanks to the part 2 and 3 of the [Build Your Own Text Editor](https://viewsourcecode.org/snaptoken/kilo/index.html) blog. 
