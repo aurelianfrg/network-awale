@@ -45,6 +45,7 @@ Side player_1_side = 0;
 Side player_2_side = 0;
 Side winning_side;
 GameSnapshot current_game_snapshot;
+int spectator_count = 0;
 
 // USER LIST
 int users_list_count = 0;
@@ -259,8 +260,13 @@ void frameContent(GridCharBuffer* gcbuf) {
 
                     // USERNAME
                     TextStyle style = { mkStyleFlags(3, FG_COLOR, ITALIC, BOLD), chat_history[chat_id].user_id%19+1, chat_history[chat_id].user_id%19+1 };
+                    if (chat_history[chat_id].user_id == -1) {
+                        style.flags = mkStyleFlags(3, INVERSE, ITALIC, BOLD);
+                    }
                     if (connected_user.id == chat_history[chat_id].user_id)
                         sprintf(general_display_buf, "(Vous) %s #%d", chat_history[chat_id].username, chat_history[chat_id].user_id);
+                    else if (chat_history[chat_id].user_id == -1)
+                        sprintf(general_display_buf, "SERVER");
                     else
                         sprintf(general_display_buf, "%s #%d", chat_history[chat_id].username, chat_history[chat_id].user_id);
                     drawTextWithRawStyle(gcbuf, TOP_LEFT, row, col, general_display_buf, &style);
@@ -500,12 +506,15 @@ void processEvents(struct pollfd pfds[2]) {
                     }
                 }
                 else if (c=='c') is_chat_open = 1;
-                else if (c==KEY_ARROW_LEFT && selected_field==IG_AWALE_HOUSE && selected_awale_house>0) selected_awale_house--;
-                else if (c==KEY_ARROW_RIGHT && selected_field==IG_AWALE_HOUSE && selected_awale_house<5) selected_awale_house++;
+                else if (c==KEY_ARROW_LEFT && selected_field==IG_AWALE_HOUSE && selected_awale_house>0 && current_game_snapshot.turn == connected_user_side) selected_awale_house--;
+                else if (c==KEY_ARROW_RIGHT && selected_field==IG_AWALE_HOUSE && selected_awale_house<5 && current_game_snapshot.turn == connected_user_side) selected_awale_house++;
                 else if (c==KEY_ARROW_UP && selected_field>0) selected_field--;
                 else if (c==KEY_ARROW_DOWN && selected_field<field_count-1) selected_field++;
                 else if (c==KEY_ENTER && selected_field==IG_BACK_BUTTON) {
-                    sendMessageMatchCancellation(sock);
+                    if (connected_user_side == NO_SIDE) 
+                        sendMessageStopObserving(sock);
+                    else 
+                        sendMessageMatchCancellation(sock);
                     changeMenu(MAIN_MENU);
                 }
                 else if (c==KEY_ENTER && selected_field==IG_AWALE_HOUSE && current_game_snapshot.turn == connected_user_side) {
@@ -537,6 +546,8 @@ void processEvents(struct pollfd pfds[2]) {
         // Vars used in switch (<C99 complience)
         int32_t user_count;
         int32_t res;
+        char username[USERNAME_LENGTH];
+        int32_t user_id;
 
         switch (message_type) {
         case USER_REGISTRATION:
@@ -633,7 +644,41 @@ void processEvents(struct pollfd pfds[2]) {
             chat_message_count++;
             unread_chat_messages++;
             break;
-            
+
+        case OBSERVATION_START:
+            recieve_from_server(&(player_1.username), sizeof(char)*USERNAME_LENGTH);
+            recieve_from_server(&(player_2.username), sizeof(char)*USERNAME_LENGTH);
+            recieve_from_server(&(player_1.id), sizeof(int32_t));
+            recieve_from_server(&(player_2.id), sizeof(int32_t));
+            recieve_from_server(&current_game_snapshot, sizeof(GameSnapshot));
+            connected_user_side = NO_SIDE;
+            changeMenu(IN_GAME_MENU);
+            is_waiting = 0;
+            break;
+
+        case SPECTATOR_JOIN:
+            spectator_count++;
+            recieve_from_server(username, sizeof(char)*USERNAME_LENGTH);
+            recieve_from_server(&user_id, sizeof(char)*USERNAME_LENGTH);
+            sprintf(general_display_buf, "%s #%d a rejoint les spectateurs", username, user_id);
+            strcpy(chat_history[chat_message_count%100].message, general_display_buf);
+            strcpy(chat_history[chat_message_count%100].username, "Serveur");
+            chat_history[chat_message_count%100].user_id = -1;
+            chat_message_count++;
+            unread_chat_messages++;
+            break;
+
+        case SPECTATOR_LEAVE:
+            spectator_count--;
+            recieve_from_server(username, sizeof(char)*USERNAME_LENGTH);
+            recieve_from_server(&user_id, sizeof(char)*USERNAME_LENGTH);
+            sprintf(general_display_buf, "%s #%d a quitté les spectateurs", username, user_id);
+            strcpy(chat_history[chat_message_count%100].message, general_display_buf);
+            strcpy(chat_history[chat_message_count%100].username, "Serveur");
+            chat_history[chat_message_count%100].user_id = -1;
+            chat_message_count++;
+            unread_chat_messages++;
+            break;
 
         default:
             sprintf(general_display_buf, "UNKWOWN MESSAGE: %d", message_type);
