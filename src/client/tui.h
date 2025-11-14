@@ -19,6 +19,7 @@
 // ===================================
 
 typedef enum TerminalKeyCode {
+    KEY_ESCAPE = 27,
     KEY_BACKSPACE = 127,
     KEY_ENTER = 13,
     KEY_ARROW_LEFT = 1000000,
@@ -90,7 +91,7 @@ typedef enum TextStyleFlags {
 
 typedef struct CellChar {
     // On veut garder une cellule assez petite en mémoire -> - de 64 bits
-    char uchar[4];      // 32 bits -> pour n'importe quel caractère unicode
+    unsigned char uchar[4];      // 32 bits -> pour n'importe quel caractère unicode
     TextStyle style;    // 24 bits -> amplement suffisant
 } CellChar;
 
@@ -118,7 +119,7 @@ typedef struct u_string {
     int char_len;
 } u_string;
 
-const extern TextStyle* NO_STYLE;
+extern TextStyle* NO_STYLE;
 
 void initApplication();
 
@@ -153,7 +154,7 @@ void getDrawPosition(int* offset_row, int* offset_col, ScreenPos pos, GridCharBu
 // strlen for unicode strings
 size_t u_strlen(char *s);
 // length for one unicode char
-size_t u_charlen(char *s);
+size_t u_charlen(unsigned char *s);
 int isAlpha(int c);
 int isNumeric(int c);
 int isAlphaNumeric(int c);
@@ -169,8 +170,8 @@ void drawDebugColors(GridCharBuffer* gcbuf);
 void drawSolidRect(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, int width, int height, TextStyle* style);
 void drawBox(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, TextStyle* style, int width, int height); 
 void drawStrongBox(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, TextStyle* style, int width, int height); 
-void drawText(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, const char* text); 
-void drawTextWithRawStyle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, const char* text, TextStyle* style); 
-void drawButton(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, const char* text, unsigned char color_code, int selected); 
+void drawText(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, char* text); 
+void drawTextWithRawStyle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, char* text, TextStyle* style); 
+void drawButton(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, char* text, unsigned char color_code, int selected); 
 void drawTitle(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col); 
-void drawPopup(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, TextStyle* style, int width, int height, const char* text); 
+void drawPopup(GridCharBuffer* gcbuf, ScreenPos pos, int offset_row, int offset_col, TextStyle* style, int width, int height, char* text); 

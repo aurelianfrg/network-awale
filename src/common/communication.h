@@ -54,7 +54,7 @@ typedef struct MessageGameUpdate {
 } MessageGameUpdate;
 
 typedef struct MessageGameEnd {
-    Side winner;
+    int32_t winner;
     GameSnapshot final_snapshot;
 } MessageGameEnd;
 
@@ -66,6 +66,13 @@ typedef struct MessageMatchProposition {
     int32_t opponent_id;
     char opponent_username[USERNAME_LENGTH];
 } MessageMatchProposition;
+
+typedef struct MessageChat {
+    char message[MAX_CHAT_MESSAGE_LENTGH];
+    char username[USERNAME_LENGTH];
+    int32_t user_id;
+} MessageChat;
+
 
 
 
@@ -91,4 +98,4 @@ void sendMessageMatchResponse(int fd, int response);
 void sendMessageMatchProposition(int fd, MessageMatchProposition message);
 void sendMessageMatchCancellation(int fd);
 
-void sendMessageChat(int fd, const char content[MAX_CHAT_MESSAGE_LENTGH]);
+void sendMessageChat(int fd, MessageChat message);
