@@ -40,6 +40,15 @@ int isMessageComplete(int32_t message_type, ssize_t r) {
         case CHAT_MESSAGE:
             expected = sizeof(int32_t) + sizeof(MessageChat);
             break;
+        case OBSERVE_GAME:
+            expected = sizeof(int32_t) + sizeof(MessageObserve);
+            break;
+        case SPECTATOR_JOIN:
+            expected = sizeof(int32_t) + sizeof(MessageSpectatorJoin);
+            break;
+        case SPECTATOR_LEAVE:
+            expected = sizeof(int32_t) + sizeof(MessageSpectatorLeave);
+            break;
         default: 
             printf("error: unknown length for message of type %d.\n", message_type);
             exit(-1);

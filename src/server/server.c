@@ -79,6 +79,10 @@ void cancel_game(Game* game) {
     game->players[TOP]->active_game = NULL;
     sendMessageMatchCancellation(game->players[BOTTOM]->fd);
     sendMessageMatchCancellation(game->players[TOP]->fd);
+
+    for (int i = 0; i < game->observers_count; ++i) {
+        sendMessageMatchCancellation(game->observers[i]->fd);
+    }
     free(game);
 }
 
@@ -95,7 +99,20 @@ void add_observer(User* observer, User* player_to_observe) {
 }
 
 void remove_observer(User* observer) {
-    
+    Game * game = observer->active_game;
+    for (int i = 0; i < MAX_OBSERVERS; ++i) {
+        if (game->observers[i] == observer) {
+            game->observers[i] = NULL;
+            game->observers[i] = game->observers[game->observers_count-1];
+            game->observers_count--;
+
+            MessageSpectatorLeave mes;
+            strcpy(mes.spectator_username, observer->username);
+            sendMessageSpectatorLeave(game->players[BOTTOM]->fd, mes);
+            sendMessageSpectatorLeave(game->players[TOP]->fd, mes);
+            break;
+        }
+    }    
 }
 
 int main(int argc, char **argv) {
@@ -562,27 +579,67 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             }
             
             // check it has indeed an active game
-            if (source_user->active_game == NULL) {
+            if (source_user->active_game != NULL || source_user->observed_game != NULL) {
+            
+                MessageChat chat_message;
+                memcpy(&chat_message, message_ptr, sizeof(MessageChat));
+
+                printf("user %s sent message \"%s\".\n", source_user->username, chat_message.message);
+
+                game = source_user->active_game;
+                // redirect message to opponent
+                if (source_user != game->players[BOTTOM]) {
+                    sendMessageChat(game->players[BOTTOM]->fd, chat_message);
+                }
+                if (source_user != game->players[TOP]){
+                    sendMessageChat(game->players[TOP]->fd, chat_message);
+                }
+
+                //also send to observers
+                for (int i = 0; i < game->observers_count; ++i) {
+                    if (source_user != game->observers[i]) {
+                        sendMessageChat(game->observers[i]->fd, chat_message);
+                    }
+                }
+            }
+            else {
                 printf("error: user %d (%s) sent a message but is in no active game.\n", user_index, source_user->username);
                 return -1;
             }
 
-            MessageChat chat_message;
-            memcpy(&chat_message, message_ptr, sizeof(MessageChat));
-
-            printf("user %s sent message \"%s\".\n", source_user->username, chat_message.message);
-
-            game = source_user->active_game;
-            // redirect message to opponent
-            if (source_user == game->players[BOTTOM]) {
-                sendMessageChat(game->players[TOP]->fd, chat_message);
-            }
-            else {
-                sendMessageChat(game->players[BOTTOM]->fd, chat_message);
-            }
-
             break;
 
+        case OBSERVE_GAME:
+            printf("OBSERVE_GAME\n");
+            // check that user is indeed created
+            if (source_user == NULL) {
+                printf("error: Got a request from an unregistered user.\n");
+                return -1;
+            }
+
+            source_user->active_game = NULL;
+            source_user->pending_game = NULL;
+
+            MessageObserve mes;
+            memcpy(&mes, message_ptr, sizeof(mes));
+
+            User* user_to_observe = NULL;
+            for (int i = 0; i < MAX_CLIENTS; ++i) {
+                if (users[i]->id == mes.opponent_id) {
+                    user_to_observe = users[i];
+                }
+            }
+
+            if (user_to_observe == NULL) {
+                printf("error: cannot find user to observe.\n");
+                sendMessageMatchCancellation(source_user->fd);
+                return -1;
+            }
+
+            add_observer(source_user, user_to_observe);
+            printf("added observer %s to game of %s", source_user->username, user_to_observe->username);
+
+            
         default:
             return -1;
         
