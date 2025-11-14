@@ -505,6 +505,7 @@ void processEvents(struct pollfd pfds[2]) {
                         chat_message.buf[0] = '\0';
                     }
                 }
+                else if (is_game_request_pending) handle_game_request_popup(c);
                 else if (c=='c') is_chat_open = 1;
                 else if (c==KEY_ARROW_LEFT && selected_field==IG_AWALE_HOUSE && selected_awale_house>0 && current_game_snapshot.turn == connected_user_side) selected_awale_house--;
                 else if (c==KEY_ARROW_RIGHT && selected_field==IG_AWALE_HOUSE && selected_awale_house<5 && current_game_snapshot.turn == connected_user_side) selected_awale_house++;
@@ -577,7 +578,7 @@ void processEvents(struct pollfd pfds[2]) {
             break;
 
         case MATCH_CANCELLATION:
-            if (navigationState == IN_GAME_MENU || navigationState == GAME_END_MENU || is_waiting_for_game_response) {
+            if (((navigationState == IN_GAME_MENU || navigationState == GAME_END_MENU) && connected_user_side == NO_SIDE) || is_waiting_for_game_response) {
                 is_notified = 1;
                 strcpy(notification_message, "Partie annulée");
             }
