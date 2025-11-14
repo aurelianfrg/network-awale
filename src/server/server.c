@@ -305,18 +305,20 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
             // list all users 
             char usernames[MAX_CLIENTS][USERNAME_LENGTH];
             int user_ids[MAX_CLIENTS];
+            char in_games[MAX_CLIENTS];
             int users_count = 0;
             for (int i = 0; i < MAX_CLIENTS; ++i) {
                 if (users[i] != NULL && i != user_index) {
                     // we found an user 
                     strcpy(usernames[users_count], users[i]->username);
                     user_ids[users_count] = users[i]->id;
+                    in_games[users_count] = (users[i]->active_game != NULL);
                     ++users_count;
                 }
             }
 
             // send result to client
-            sendUserList(user_fd, usernames, user_ids, users_count);
+            sendUserList(user_fd, usernames, user_ids, users_count, in_games);
 
             break;
 

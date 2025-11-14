@@ -4,6 +4,7 @@
 // constants 
 
 #define USERNAME_LENGTH 100 // or 25 4-bytes UTF-8 chars
+#define MAX_OBSERVERS 10
 #define true 1
 #define false 0
 #define bool char
@@ -26,6 +27,7 @@ typedef struct User {
     char username[USERNAME_LENGTH];
     Game* active_game;
     Game* pending_game;     // placeholder for when an invitation is received
+    Game* observed_game; 
 } User;
 
 typedef struct Board {
