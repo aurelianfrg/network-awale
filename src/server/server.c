@@ -620,6 +620,7 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
                 }
                 else {
                     printf("error: no one to send message to.\n");
+                    return -1;
                 }
 
                 // redirect message to opponent

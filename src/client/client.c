@@ -24,6 +24,8 @@ char is_waiting_for_game_response = 0;
 char is_game_request_pending = 0;
 char is_chat_open = 0;
 
+char do_prevent_next_cancellation = 0;
+
 // USER
 char _user_pseudo_buf[USERNAME_LENGTH];
 u_string user_pseudo = { _user_pseudo_buf, 0, 0 };
@@ -171,6 +173,13 @@ void frameContent(GridCharBuffer* gcbuf) {
                 drawText(gcbuf, TOP_CENTER, 1, 0, "!{vF004}Votre tour");
             else 
                 drawText(gcbuf, TOP_CENTER, 1, 0, "!{vF004}Tour de l'adversaire");
+            if (spectator_count>0) {
+                if (spectator_count>1)
+                    sprintf(general_display_buf, "%d spectateurs", spectator_count);
+                else
+                    sprintf(general_display_buf, "%d spectateur", spectator_count);
+                drawText(gcbuf, TOP_CENTER, 2, 0, general_display_buf);
+            }
             sprintf(general_display_buf, "Opposant: !{u}%s #%d!{r}", player_2.username, player_2.id);
             drawText(gcbuf, CENTER, -8, 0, general_display_buf);
             sprintf(general_display_buf, "%d points", current_game_snapshot.points[player_2_side]);
@@ -186,6 +195,12 @@ void frameContent(GridCharBuffer* gcbuf) {
             else
                 sprintf(general_display_buf, "Tour de !{u}%s #%d", player_2.username, player_2.id);
             drawText(gcbuf, TOP_CENTER, 1, 0, general_display_buf);
+            drawText(gcbuf, TOP_CENTER, 2, 0, "!{vF004}SPECTATEUR");
+            if (spectator_count>1)
+                sprintf(general_display_buf, "%d spectateurs", spectator_count);
+            else
+                sprintf(general_display_buf, "%d spectateur", spectator_count);
+            drawText(gcbuf, TOP_CENTER, 3, 0, general_display_buf);
 
             sprintf(general_display_buf, "!{u}%s #%d!{r}", player_2.username, player_2.id);
             drawText(gcbuf, CENTER, -8, 0, general_display_buf);
@@ -369,18 +384,22 @@ void changeMenu(NavigationState new_menu) {
         user_pseudo.byte_len = 0;
         user_pseudo.char_len = 0;
         chat_message_count = 0;
+        unread_chat_messages = 0;
         break;
 
     case MAIN_MENU:
         selected_field = 0;
         field_count = 3;
         chat_message_count = 0;
+        unread_chat_messages = 0;
+        spectator_count = 0;
         break;
 
     case USER_LIST_MENU:
         selected_field = 0;
         field_count = users_list_count;
         chat_message_count = 0;
+        unread_chat_messages = 0;
         break;
 
     case IN_GAME_MENU:
@@ -485,7 +504,8 @@ void processEvents(struct pollfd pfds[2]) {
                 break;
             
             case IN_GAME_MENU:
-                if (is_chat_open) {
+                if (is_game_request_pending) handle_game_request_popup(c);
+                else if (is_chat_open) {
                     if (c==KEY_ESCAPE) is_chat_open = 0;
                     else if (isAnyValidChar(c) && chat_message.char_len<MAX_CHAT_MESSAGE_LENTGH/4) 
                         u_strAppend(&chat_message, c);
@@ -505,7 +525,7 @@ void processEvents(struct pollfd pfds[2]) {
                         chat_message.buf[0] = '\0';
                     }
                 }
-                else if (is_game_request_pending) handle_game_request_popup(c);
+                if (is_game_request_pending) handle_game_request_popup(c);
                 else if (c=='c') is_chat_open = 1;
                 else if (c==KEY_ARROW_LEFT && selected_field==IG_AWALE_HOUSE && selected_awale_house>0 && current_game_snapshot.turn == connected_user_side) selected_awale_house--;
                 else if (c==KEY_ARROW_RIGHT && selected_field==IG_AWALE_HOUSE && selected_awale_house<5 && current_game_snapshot.turn == connected_user_side) selected_awale_house++;
@@ -578,7 +598,7 @@ void processEvents(struct pollfd pfds[2]) {
             break;
 
         case MATCH_CANCELLATION:
-            if (((navigationState == IN_GAME_MENU || navigationState == GAME_END_MENU) && connected_user_side == NO_SIDE) || is_waiting_for_game_response) {
+            if (((navigationState == IN_GAME_MENU || navigationState == GAME_END_MENU) && !do_prevent_next_cancellation) || is_waiting_for_game_response) {
                 is_notified = 1;
                 strcpy(notification_message, "Partie annulée");
             }
@@ -586,11 +606,12 @@ void processEvents(struct pollfd pfds[2]) {
                 is_notified = 1;
                 strcpy(notification_message, "Demande annulée");
             }
-            if (navigationState == IN_GAME_MENU || navigationState == GAME_END_MENU) changeMenu(MAIN_MENU);
+            if ((navigationState == IN_GAME_MENU || navigationState == GAME_END_MENU) && !do_prevent_next_cancellation) changeMenu(MAIN_MENU);
             is_game_request_pending = 0;
             is_waiting_for_game_response = 0;
             is_waiting = 0;
             is_chat_open = 0;
+            do_prevent_next_cancellation = 0;
             break;
 
         case MATCH_RESPONSE:
@@ -713,8 +734,14 @@ void handle_game_request_popup(int c) {
         sendMessageMatchResponse(sock, !game_request_selected_field);
         is_game_request_pending = 0;
         // Si on a accepté la game
-        if (!game_request_selected_field)
+        if (!game_request_selected_field) {
+            chat_message_count = 0;
+            unread_chat_messages = 0;
+            is_chat_open = 0;
             is_waiting = 1;
+            if ((navigationState == IN_GAME_MENU || navigationState == GAME_END_MENU) && connected_user_side == NO_SIDE)
+                do_prevent_next_cancellation = 1;
+        }
     }
 }
 
