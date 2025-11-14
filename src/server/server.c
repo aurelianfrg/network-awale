@@ -116,7 +116,6 @@ void remove_observer(User* observer) {
             mes.spectator_id = observer->id;
             sendMessageSpectatorLeave(game->players[BOTTOM]->fd, mes);
             sendMessageSpectatorLeave(game->players[TOP]->fd, mes);
-
             for (int i = 0; i < game->observers_count; ++i) {
                 sendMessageSpectatorLeave(game->observers[i]->fd, mes);
             }
@@ -619,6 +618,10 @@ int handleMessage(int32_t message_type, void* message_ptr, ssize_t r, User* user
                 else if (source_user->observed_game != NULL) {
                     game = source_user->observed_game;
                 }
+                else {
+                    printf("error: no one to send message to.\n");
+                }
+
                 // redirect message to opponent
                 if (source_user != game->players[BOTTOM]) {
                     sendMessageChat(game->players[BOTTOM]->fd, chat_message);
